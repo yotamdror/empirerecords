@@ -296,6 +296,18 @@ html, body {
   color: var(--ink-soft);
 }
 
+.story .story-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-family: var(--f-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  text-decoration: none;
+}
+.story .story-link:hover { color: var(--accent-2); }
+
 /* pinned (BEC app) gets a subtle highlight */
 .story.pinned {
   background: rgba(91, 74, 240, 0.05);

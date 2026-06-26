@@ -22,13 +22,10 @@ function App() {
       <header className="masthead">
         <div className="wordmark">
           <h1>Empire Records</h1>
-          <div className="sub">Musings, data &amp; minor delusions from New York.</div>
+          <div className="sub">Apps, data &amp; New York-shaped experiments.</div>
         </div>
         <nav className="nav">
-          <a className="active">Index</a>
-          <a>Archive</a>
-          <a>BEC App</a>
-          <a>About</a>
+          <a href="/baconeggcheese/">BEC App</a>
         </nav>
       </header>
 
@@ -82,6 +79,17 @@ function App() {
                 </div>
                 <h3>{s.title}</h3>
                 <p className="tagline">{s.tagline}</p>
+                {s.link && (
+                  <a
+                    className="story-link"
+                    href={s.link}
+                    onClick={e => e.stopPropagation()}
+                    target={s.link.startsWith('http') ? '_blank' : undefined}
+                    rel={s.link.startsWith('http') ? 'noopener noreferrer' : undefined}
+                  >
+                    {s.linkLabel || 'Learn more →'}
+                  </a>
+                )}
               </div>
             ))}
           </div>
