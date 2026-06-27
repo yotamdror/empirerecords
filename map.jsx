@@ -49,6 +49,7 @@ function MapboxMap({ activeStory }) {
   const containerRef = React.useRef(null);
   const mapRef = React.useRef(null);
   const [loaded, setLoaded] = React.useState(false);
+  const [unsupported, setUnsupported] = React.useState(false);
   const pendingStory = React.useRef(activeStory);
   pendingStory.current = activeStory;
 
@@ -57,19 +58,36 @@ function MapboxMap({ activeStory }) {
       console.warn('Empire Records: add your Mapbox token to config.js');
     }
 
+    // WebGL can be unavailable or blocked (Lockdown Mode, some privacy
+    // browsers/extensions, older devices); without this guard the
+    // mapboxgl.Map constructor throws synchronously and, with no error
+    // boundary catching it, used to blank the entire page.
+    if (!mapboxgl.supported()) {
+      console.error('Empire Records: this browser does not support Mapbox GL (WebGL unavailable).');
+      setUnsupported(true);
+      return;
+    }
+
     mapboxgl.accessToken = window.MAPBOX_TOKEN || '';
 
-    const map = new mapboxgl.Map({
-      container: containerRef.current,
-      style: 'mapbox://styles/mapbox/light-v11',
-      bounds: [[-74.27, 40.49], [-73.68, 40.92]],
-      fitBoundsOptions: {
-        padding: { top: 40, bottom: 40, left: 40, right: 440 }
-      },
-      minZoom: 9,
-      maxZoom: 16,
-      attributionControl: false,
-    });
+    let map;
+    try {
+      map = new mapboxgl.Map({
+        container: containerRef.current,
+        style: 'mapbox://styles/mapbox/light-v11',
+        bounds: [[-74.27, 40.49], [-73.68, 40.92]],
+        fitBoundsOptions: {
+          padding: { top: 40, bottom: 40, left: 40, right: 440 }
+        },
+        minZoom: 9,
+        maxZoom: 16,
+        attributionControl: false,
+      });
+    } catch (err) {
+      console.error('Empire Records: failed to initialize Mapbox GL map.', err);
+      setUnsupported(true);
+      return;
+    }
 
     map.addControl(
       new mapboxgl.AttributionControl({ compact: true }),
@@ -159,6 +177,19 @@ function MapboxMap({ activeStory }) {
     if (!loaded || !mapRef.current) return;
     applyStory(mapRef.current, activeStory);
   }, [activeStory, loaded]);
+
+  if (unsupported) {
+    return (
+      <div style={{
+        position: 'absolute', inset: 0, display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        padding: 40, textAlign: 'center', color: 'var(--ink-soft)',
+        fontFamily: 'var(--f-sans)', fontSize: 14,
+      }}>
+        Map unavailable in this browser. Try a different browser or device.
+      </div>
+    );
+  }
 
   return <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />;
 }

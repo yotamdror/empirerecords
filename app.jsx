@@ -1,18 +1,55 @@
 /* global React, ReactDOM, MapboxMap, Rat */
 
+// Safari throws a SecurityError on localStorage access when "Block All
+// Cookies" or Lockdown Mode is on; an uncaught throw here during the
+// initial render (with no error boundary) would blank the whole app.
+function readPanelPref() {
+  try {
+    return localStorage.getItem('er-panel') !== '0';
+  } catch (_) {
+    return true;
+  }
+}
+function writePanelPref(value) {
+  try {
+    localStorage.setItem('er-panel', value ? '1' : '0');
+  } catch (_) {}
+}
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error) {
+    console.error('Empire Records crashed:', error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 40, fontFamily: 'sans-serif' }}>
+          Something went wrong loading Empire Records. Try reloading the page.
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function App() {
   const [hovered, setHovered] = React.useState(null);
   const [pinned,  setPinned]  = React.useState(null);
-  const [panelOpen, setPanelOpen] = React.useState(
-    () => localStorage.getItem('er-panel') !== '0'
-  );
+  const [panelOpen, setPanelOpen] = React.useState(readPanelPref);
 
   const display = hovered || pinned;
 
   const togglePanel = () => {
     setPanelOpen(v => {
       const next = !v;
-      localStorage.setItem('er-panel', next ? '1' : '0');
+      writePanelPref(next);
       return next;
     });
   };
@@ -101,4 +138,6 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <ErrorBoundary><App/></ErrorBoundary>
+);
