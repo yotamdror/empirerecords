@@ -5,16 +5,16 @@ These rules extend `~/Projects/AGENTS.md` and apply to this static site.
 ## Thread naming
 
 Title every thread so it reads on a phone: the slug, a one-word stage, and
-for build the step. For example `map-pins find`, `map-pins spec`,
-`map-pins build 3/5`, `gps-drift fix`.
+for build the step. For example `map-pins plan`, `map-pins build 3/5`,
+`gps-drift fix`.
 
 - Slug first: lowercase, hyphenated, 2–3 words.
-- Stage is one of: ask (a question), find (discovery), spec (planning),
-  build (building the agreed plan), fix (a bug or a tweak).
+- Stage is one of: ask (a question), plan (what to build and how), build
+  (building the agreed plan), fix (a bug or a tweak).
 - build shows the plan's step as current/total, for example `build 3/5`,
   never a bare number. The other stages show no step.
 - Add ✓ when a thread finishes its stage but the work isn't finished:
-  `map-pins spec ✓`. When the work is finished and verified, the title is
+  `map-pins plan ✓`. When the work is finished and verified, the title is
   `map-pins done`.
 - Prefix HOLD when the owner parks it: `HOLD map-pins build 3/5`.
 - No emoji (✓ and other plain symbols are fine). No project name, no
