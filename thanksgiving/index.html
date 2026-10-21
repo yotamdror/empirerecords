@@ -46,6 +46,15 @@
   color-scheme: dark;
 }
 
+/* Busy days are dark on the light page and bright on the dark page; the captions follow. */
+.tone-dark { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .tone-light { display: none; }
+  :root:not([data-theme="light"]) .tone-dark { display: inline; }
+}
+:root[data-theme="dark"] .tone-light { display: none; }
+:root[data-theme="dark"] .tone-dark { display: inline; }
+
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
@@ -155,7 +164,7 @@ th { font-weight: 500; color: var(--ink-soft); }
   </section>
 
   <section class="scrolly">
-    <figure class="graphic" id="graphic" role="img" aria-label="Calendar of daily stove fires in New York City apartment buildings, 2014 to 2026. Thanksgiving is the darkest day of every year.">
+    <figure class="graphic" id="graphic" role="img" aria-label="Calendar of daily stove fires in New York City apartment buildings, 2014 to 2026. Thanksgiving is the busiest day of every year.">
       <div class="fig-head">
         <div class="legend" data-states="0 1 2">
           <span>Stove fires per day</span>
@@ -173,14 +182,14 @@ th { font-weight: 500; color: var(--ink-soft); }
 
     <div class="steps">
       <div class="step" data-step="0">
-        <p>Each row is a year. Each sliver is one day, shaded by how many times the FDNY was called to a stove fire in a New York City apartment building. Darker means more.</p>
+        <p>Each row is a year. Each sliver is one day, shaded by how many times the FDNY was called to a stove fire in a New York City apartment building. <span class="tone-light">Darker</span><span class="tone-dark">Brighter</span> means more.</p>
       </div>
       <div class="step" data-step="1">
         <p>Look closer at November and December. Christmas Eve, Christmas and New Year’s Eve make straight columns, because they fall on the same date every year.</p>
-        <p>The darkest mark in each row does not. It moves around between Nov. 22 and Nov. 28.</p>
+        <p>The <span class="tone-light">darkest</span><span class="tone-dark">brightest</span> mark in each row does not. It moves around between Nov. 22 and Nov. 28.</p>
       </div>
       <div class="step" data-step="2">
-        <p>Slide each year so its fourth Thursday of November lines up, and the dark marks stack into one column.</p>
+        <p>Slide each year so its fourth Thursday of November lines up, and the <span class="tone-light">dark</span><span class="tone-dark">bright</span> marks stack into one column.</p>
         <p>Thanksgiving was the city’s worst day for stove fires in all 12 years from 2014 to 2025. Older records show the same thing every year back to 2005.</p>
       </div>
       <div class="step" data-step="3">
