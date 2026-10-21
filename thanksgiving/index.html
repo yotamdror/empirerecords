@@ -90,7 +90,7 @@ h1 { font: 600 clamp(30px, 5.2vw, 50px)/1.08 var(--f-serif); letter-spacing: -0.
 .fig-head > * { position: absolute; inset: 10px 0 auto 0; transition: opacity 500ms ease; }
 .legend { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
 .ramp { position: relative; flex: none; width: clamp(110px, 30vw, 168px); height: 10px; border-radius: 2px;
-  background: linear-gradient(90deg, var(--r0) 0%, var(--r1) 12.5%, var(--r2) 28.1%, var(--r3) 56.3%, var(--r4) 100%); }
+  background: linear-gradient(90deg, var(--r0) 0%, var(--r1) 10%, var(--r2) 30%, var(--r3) 60%, var(--r4) 100%); }
 .ramp span { position: absolute; top: 13px; transform: translateX(-50%); font: 400 10px/1 var(--f-mono); color: var(--ink-mute); }
 .plot { position: relative; flex: 1; min-height: 0; }
 .plot canvas, .plot svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -167,11 +167,12 @@ th { font-weight: 500; color: var(--ink-soft); }
     <figure class="graphic" id="graphic" role="img" aria-label="Calendar of daily stove fires in New York City apartment buildings, 2014 to 2026. Thanksgiving is the busiest day of every year.">
       <div class="fig-head">
         <div class="legend" data-states="0 1 2">
-          <span>Stove fires per day</span>
+          <span>Stove fires vs. a typical day</span>
           <span class="ramp" aria-hidden="true"></span>
         </div>
-        <div data-states="3">Stove fires: Thanksgiving vs. a typical day</div>
-        <div data-states="4" id="hourly-head">Average stove fires per hour</div>
+        <div data-states="3" id="holiday-head">Times a typical day: average and range</div>
+        <div data-states="4">Stove fires: Thanksgiving vs. a typical day</div>
+        <div data-states="5" id="hourly-head">Average stove fires per hour</div>
       </div>
       <div class="plot">
         <canvas></canvas>
@@ -182,7 +183,7 @@ th { font-weight: 500; color: var(--ink-soft); }
 
     <div class="steps">
       <div class="step" data-step="0">
-        <p>Each row is a year. Each sliver is one day, shaded by how many times the FDNY was called to a stove fire in a New York City apartment building. <span class="tone-light">Darker</span><span class="tone-dark">Brighter</span> means more.</p>
+        <p>Each row is a year. Each sliver is one day, shaded by how many times the FDNY was called to a stove fire in a New York City apartment building, compared with a typical day that year. <span class="tone-light">Darker</span><span class="tone-dark">Brighter</span> means more.</p>
       </div>
       <div class="step" data-step="1">
         <p>Look closer at November and December. Christmas Eve, Christmas and New Year’s Eve make straight columns, because they fall on the same date every year.</p>
@@ -193,9 +194,13 @@ th { font-weight: 500; color: var(--ink-soft); }
         <p>Thanksgiving was the city’s worst day for stove fires in all 12 years from 2014 to 2025. Older records show the same thing every year back to 2005.</p>
       </div>
       <div class="step" data-step="3">
-        <p><span class="key key-ember"></span>Thanksgiving brings four to five times as many calls as <span class="key key-typical"></span>a typical day of the same year. The record was <span class="num-inline">126</span> in 2018.</p>
+        <p>No other holiday comes close. Christmas Eve, the runner-up, averages 2.5 times a typical day. Thanksgiving averages 4.7.</p>
+        <p>Only about 1 day in 100 reaches even twice the usual number.</p>
       </div>
       <div class="step" data-step="4">
+        <p><span class="key key-ember"></span>Thanksgiving brings four to five times as many calls as <span class="key key-typical"></span>a typical day of the same year. The record was <span class="num-inline">126</span> in 2018.</p>
+      </div>
+      <div class="step" data-step="5">
         <p>The fires follow the turkey. <span class="key key-ember"></span>On Thanksgiving they climb all morning and peak at 2 p.m., about eight times <span class="key key-typical"></span>a normal November Thursday at that hour.</p>
         <p>By 8 p.m., with dinner on the table, they are down by three quarters.</p>
       </div>
@@ -258,16 +263,30 @@ th { font-weight: 500; color: var(--ink-soft); }
     const bySlot = new Int16Array(366).fill(-1);
     counts.forEach((_, i) => { bySlot[slotOf(y, i)] = i; });
     return { y, r, counts, rank, known: known.length, names, tg, tgSlot: slotOf(y, tg), bySlot,
-             complete: counts[counts.length - 1] != null, median: D.median[y] };
+             complete: counts[counts.length - 1] != null,
+             median: D.median[y] ?? d3.median(known, i => counts[i]) };   // a partial year uses its days so far
   });
   const done = rows.filter(d => d.complete);
   const hourly = D.hourly;
+
+  // How each holiday compares with a typical day of its year, across the complete years
+  const ratios = new Map();
+  for (const row of done) for (const [i, name] of row.names) {
+    const label = name === "Day before Thanksgiving" ? "Thanksgiving Eve" : name;
+    if (!ratios.has(label)) ratios.set(label, []);
+    ratios.get(label).push(row.counts[i] / row.median);
+  }
+  const holidayStats = [...ratios].map(([name, v]) => ({ name, mean: d3.mean(v), min: d3.min(v), max: d3.max(v) }))
+    .sort((a, b) => b.mean - a.mean);
+  const allDays = done.flatMap(row => row.counts.map(c => c / row.median));
+  const shareOver2 = allDays.filter(r => r >= 2).length / allDays.length;
 
   // ---- States: three calendar views, then two charts ----
   const STATES = [
     { view: "cal", win: [0, 366], align: 0 },
     { view: "cal", win: [305, 366], align: 0 },
     { view: "cal", win: [-27, 34], align: 1 },   // same width as Nov–Dec, so the rows slide without zooming
+    { view: "holidays" },
     { view: "dots" },
     { view: "hours" },
   ];
@@ -284,26 +303,26 @@ th { font-weight: 500; color: var(--ink-soft); }
 
   let W = 0, H = 0, dpr = 1, rowH = 0;
   let M = {}, C = {};                 // calendar margins, chart margins
-  let xYear, yCount, xHour, yHour;
+  let xYear, yCount, xHour, yHour, xRatio, yHoliday, holLeft;
   let palette = {}, color, cellColor = [];
 
-  // The color scale tops out at the busiest day shown; the stops match the CSS legend gradient.
-  const colorMax = Math.ceil(d3.max(rows, row => d3.max(row.counts)) / 10) * 10;
-  const STOPS = [0, 0.125, 0.281, 0.563, 1];
+  // Days are colored by how many times a typical day of their year they are, so ordinary days
+  // recede and the standouts show. The stops match the CSS legend gradient (0, 10, 30, 60, 100%).
+  const STOPS = [0.5, 1, 2, 3.5, 5.5];
   const ramp = fig.querySelector(".ramp");
-  d3.ticks(0, colorMax, 3).forEach(v => {
+  [1, 2, 3, 4, 5].forEach(v => {
     const s = ramp.appendChild(document.createElement("span"));
-    s.style.left = `${(v / colorMax) * 100}%`;
-    s.textContent = v;
+    s.style.left = `${((v - STOPS[0]) / (STOPS[4] - STOPS[0])) * 100}%`;
+    s.textContent = `${v}×`;
   });
 
   function readPalette() {
     const cs = getComputedStyle(document.documentElement);
     const v = n => cs.getPropertyValue(n).trim();
     palette = { ember: v("--ember"), typical: v("--typical"), ink: v("--ink"), mute: v("--ink-mute"), hair: v("--hair") };
-    color = d3.scaleLinear().domain(STOPS.map(f => f * colorMax)).range(["--r0", "--r1", "--r2", "--r3", "--r4"].map(v))
+    color = d3.scaleLinear().domain(STOPS).range(["--r0", "--r1", "--r2", "--r3", "--r4"].map(v))
       .interpolate(d3.interpolateLab).clamp(true);
-    cellColor = rows.map(row => row.counts.map(c => (c == null ? null : color(c))));
+    cellColor = rows.map(row => row.counts.map(c => (c == null ? null : color(c / row.median))));
   }
 
   function layout() {
@@ -318,6 +337,9 @@ th { font-weight: 500; color: var(--ink-soft); }
     yCount = d3.scaleLinear().domain([0, d3.max(done, d => d.counts[d.tg]) * 1.1]).nice().range([H - C.bottom, C.top]);
     xHour = d3.scaleLinear().domain([0, 23]).range([C.left + 6, W - C.right]);
     yHour = d3.scaleLinear().domain([0, 13.5]).range([H - C.bottom, C.top]);
+    holLeft = narrow ? 112 : 132;
+    xRatio = d3.scaleLinear().domain([0.5, 5.6]).range([holLeft, W - (narrow ? 44 : 64)]);
+    yHoliday = d3.scaleBand().domain(holidayStats.map(d => d.name)).range([C.top + 12, H - C.bottom]).padding(0.35);
   }
 
   // ---- Geometry ----
@@ -387,7 +409,7 @@ th { font-weight: 500; color: var(--ink-soft); }
 
     // Thanksgiving marks: cells in the calendar, dots in the year chart
     if (!both) {
-      const alphaOf = s => (STATES[s].view === "hours" ? 0 : 1);
+      const alphaOf = s => (isCal(s) || STATES[s].view === "dots" ? 1 : 0);
       const alpha = lerp(alphaOf(a), alphaOf(b), ease(t));
       if (alpha > 0.002 && hasDots) {
         ctx.save();
@@ -468,8 +490,33 @@ th { font-weight: 500; color: var(--ink-soft); }
         .text(short ? `${d < 0 ? "−" : "+"}${Math.abs(d) / 7} wk` : d < 0 ? `${-d / 7} wk before` : `${d / 7} wk after`);
     });
 
-    // State 3: Thanksgiving vs a typical day, by year
-    const g3 = svg.append("g").attr("class", "layer").attr("data-states", "3");
+    // State 3: every holiday against a typical day, average dot and range line
+    const gh = svg.append("g").attr("class", "layer").attr("data-states", "3");
+    const xr = xRatio;
+    const axisY = H - C.bottom + 6.5;
+    gh.append("line").attr("class", "rule").attr("x1", xr(d3.min(holidayStats, d => d.min))).attr("x2", xr(d3.max(holidayStats, d => d.max)))
+      .attr("y1", axisY).attr("y2", axisY);
+    [1, 2, 3, 4, 5].forEach(v => gh.append("text").attr("class", "tick").attr("x", xr(v)).attr("y", axisY + 14)
+      .attr("text-anchor", "middle").text(`${v}×`));
+    gh.append("line").attr("class", "hairline").attr("x1", xr(1)).attr("x2", xr(1)).attr("y1", C.top + 4).attr("y2", axisY - 3);
+    gh.append("line").attr("class", "hairline").attr("x1", xr(2)).attr("x2", xr(2)).attr("y1", C.top + 4).attr("y2", axisY - 3);
+    gh.append("text").attr("class", "note").attr("x", xr(1) - 4).attr("y", C.top + 2).attr("text-anchor", "end").text("typical");
+    gh.append("text").attr("class", "note").attr("x", xr(2) + 4).attr("y", C.top + 2)
+      .text(`only ${Math.round(shareOver2 * 100)}% of days reach 2×`);
+    const hrow = gh.selectAll("g.hol").data(holidayStats).join("g").attr("class", "hol")
+      .attr("transform", d => `translate(0,${yHoliday(d.name) + yHoliday.bandwidth() / 2})`);
+    hrow.append("text").attr("class", d => (d.name === "Thanksgiving" ? "label" : "note")).attr("x", holLeft - 12)
+      .attr("text-anchor", "end").attr("dominant-baseline", "middle").text(d => d.name);
+    hrow.append("line").attr("class", "hol-range").attr("stroke", d => (d.name === "Thanksgiving" ? palette.ember : palette.mute))
+      .attr("stroke-width", 2).attr("stroke-linecap", "round").attr("opacity", 0.45)
+      .attr("x1", d => xr(d.min)).attr("x2", d => xr(d.max));
+    hrow.append("circle").attr("class", "hol-dot").attr("r", 4.5).attr("cx", d => xr(d.mean))
+      .attr("fill", d => (d.name === "Thanksgiving" ? palette.ember : palette.ink));
+    hrow.append("text").attr("class", "hol-value tick").attr("x", d => xr(d.max) + 8).attr("dominant-baseline", "middle")
+      .text(d => `${d.mean.toFixed(1)}×`);
+
+    // State 4: Thanksgiving vs a typical day, by year
+    const g3 = svg.append("g").attr("class", "layer").attr("data-states", "4");
     const x0 = xYear(done[0].y), x1 = xYear(done[done.length - 1].y);
     g3.append("line").attr("class", "rule").attr("x1", x0).attr("x2", x1).attr("y1", H - C.bottom + 6.5).attr("y2", H - C.bottom + 6.5);
     d3.ticks(done[0].y, done[done.length - 1].y, W < 560 ? 4 : 6).forEach(y => g3.append("text").attr("class", "tick")
@@ -495,8 +542,8 @@ th { font-weight: 500; color: var(--ink-soft); }
     g3.append("text").attr("class", "note").attr("x", xYear(peak.y)).attr("y", yCount(peak.counts[peak.tg]) - 12)
       .attr("text-anchor", "middle").text(`${peak.counts[peak.tg]} in ${peak.y}`);
 
-    // State 4: hour by hour
-    const g4 = svg.append("g").attr("class", "layer").attr("data-states", "4");
+    // State 5: hour by hour
+    const g4 = svg.append("g").attr("class", "layer").attr("data-states", "5");
     const hx0 = xHour(0), hx1 = xHour(23);
     g4.append("line").attr("class", "rule").attr("x1", hx0).attr("x2", hx1).attr("y1", H - C.bottom + 6.5).attr("y2", H - C.bottom + 6.5);
     [[0, "12 a.m."], [6, "6 a.m."], [12, "Noon"], [18, "6 p.m."], [23, "11 p.m."]].forEach(([h, l]) =>
@@ -529,7 +576,17 @@ th { font-weight: 500; color: var(--ink-soft); }
   function showLayers(s, ms) {
     svg.selectAll(".layer").transition().duration(ms).style("opacity", function () { return visibleIn(this, s) ? 1 : 0; });
     heads.forEach(el => { el.style.opacity = visibleIn(el, s) ? 1 : 0; });
-    if (s === 4) {   // draw the hourly lines from left to right
+    if (s === 3) {   // holidays slide out from "typical" to where they sit
+      const x1 = xRatio(1), stagger = i => ms * 0.25 + i * 70;
+      svg.selectAll(".hol-dot").attr("cx", ms ? x1 : d => xRatio(d.mean))
+        .transition().delay((_, i) => stagger(i)).duration(ms ? 900 : 0).ease(d3.easeCubicOut).attr("cx", d => xRatio(d.mean));
+      svg.selectAll(".hol-range").attr("x1", ms ? x1 : d => xRatio(d.min)).attr("x2", ms ? x1 : d => xRatio(d.max))
+        .transition().delay((_, i) => stagger(i)).duration(ms ? 900 : 0).ease(d3.easeCubicOut)
+        .attr("x1", d => xRatio(d.min)).attr("x2", d => xRatio(d.max));
+      svg.selectAll(".hol-value").attr("opacity", ms ? 0 : 1)
+        .transition().delay((_, i) => stagger(i) + 700).duration(ms ? 300 : 0).attr("opacity", 1);
+    }
+    if (s === 5) {   // draw the hourly lines from left to right
       svg.selectAll(".draw").each(function () {
         const len = this.getTotalLength();
         d3.select(this).attr("stroke-dasharray", `${len} ${len}`).attr("stroke-dashoffset", ms ? len : 0)
@@ -584,7 +641,13 @@ th { font-weight: 500; color: var(--ink-soft); }
       if (c == null) return showTip(`${head}Not in the data yet`, px, py);
       const rk = row.rank.get(i);
       const rankText = rk === 1 ? `worst day of ${row.y}${row.complete ? "" : " so far"}` : `#${rk} of ${row.known} days`;
-      return showTip(`${head}<span class="num">${c}</span> stove fire${c === 1 ? "" : "s"} · ${rankText}`, px, py);
+      return showTip(`${head}<span class="num">${c}</span> stove fire${c === 1 ? "" : "s"} · ${(c / row.median).toFixed(1)}× a typical day<br>${rankText}`, px, py);
+    }
+    if (view === "holidays") {
+      const hd = holidayStats.find(d => Math.abs(yHoliday(d.name) + yHoliday.bandwidth() / 2 - py) <= yHoliday.step() / 2);
+      if (!hd) return hideTip();
+      return showTip(`<b>${hd.name}, ${done[0].y}–${done[done.length - 1].y}</b><span class="num">${hd.mean.toFixed(1)}×</span> a typical day on average<br>` +
+        `Lowest ${hd.min.toFixed(1)}×, highest ${hd.max.toFixed(1)}×`, px, py);
     }
     if (view === "dots") {
       const row = done[d3.leastIndex(done, d => Math.abs(xYear(d.y) - px))];
@@ -623,7 +686,8 @@ th { font-weight: 500; color: var(--ink-soft); }
   const recent = done.slice(-5).map(d => d.counts[d.tg]);
   document.getElementById("forecast").textContent =
     `In the last five years Thanksgiving brought between ${d3.min(recent)} and ${d3.max(recent)} calls. If that holds, expect about ${Math.round(d3.mean(recent) / 10) * 10} this year, roughly four times a normal day.`;
-  document.getElementById("hourly-head").textContent = `Average stove fires per hour, ${hourly.years[0]}–${hourly.years[1]}`;
+  document.getElementById("holiday-head").textContent = `Times a typical day: average and range, ${done[0].y}–${done[done.length - 1].y}`;
+  document.getElementById("hourly-head").textContent =`Average stove fires per hour, ${hourly.years[0]}–${hourly.years[1]}`;
   document.getElementById("through").textContent =`Data through ${d3.utcFormat("%B %-d, %Y")(new Date(D.lastDate))}.`;
 
   // ---- Boot ----
