@@ -15,7 +15,10 @@ import urllib.request
 
 API = "https://data.cityofnewyork.us/resource/8m42-w767.json"
 CLASS = "Multiple Dwelling 'A' - Food on the stove fire"
-FIRST_YEAR = 2005
+# Daily counts run about 50% higher before 2014 (likely a change in how calls are
+# coded), which would swamp the color scale. Thanksgiving was the worst day in
+# every one of those years too; the page says so in a note.
+FIRST_YEAR = 2014
 OUT = pathlib.Path(__file__).with_name("data.js")
 
 
