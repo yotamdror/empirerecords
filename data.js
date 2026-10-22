@@ -41,6 +41,19 @@ window.STORIES = [
     linkLabel: "Get the app →"
   },
   {
+    id: "platecheck",
+    kicker: "Beta",
+    title: "Plate Check — Get the Receipts",
+    tagline: "Tap a plate in a live camera view and check its NYC parking and moving summons records, including out-of-state plates.",
+    date: "2026",
+    tag: "App",
+    borough: "citywide",
+    points: [[485, 410], [610, 690], [690, 360]],
+    neighborhood: "Five Boroughs",
+    link: "/plate-check/",
+    linkLabel: "Try the beta →"
+  },
+  {
     id: "about",
     kicker: "Dispatch",
     title: "About Me",

@@ -1,0 +1,13 @@
+{
+  "name": "Plate Check · Empire Records",
+  "short_name": "Plate Check",
+  "description": "Tap a license plate in a live view and check NYC public records.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f1e8",
+  "theme_color": "#111b33",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

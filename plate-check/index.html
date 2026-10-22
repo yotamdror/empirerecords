@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111b33">
+  <meta name="description" content="Live plate scanner with fast NYC public-record lookups and a sense of humor.">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <title>Plate Check · Empire Records</title>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="../" aria-label="Empire Records home">
+      <span class="brand-mark">E<span>R</span></span>
+      <span>EMPIRE<br>RECORDS</span>
+    </a>
+    <span class="header-tag">NYC OPEN DATA EXPERIMENT <span class="header-dot"></span> BETA</span>
+  </header>
+
+  <main class="page">
+    <section class="intro">
+      <p class="eyebrow"><span class="eyebrow-line"></span> A FIELD GUIDE TO QUESTIONABLE PARKING</p>
+      <h1>Spot the plate.<br><em>Get the receipts.</em></h1>
+      <p class="intro-copy">Point your camera at a license plate. Tap the highlight. See what NYC public records have to say.</p>
+    </section>
+
+    <div class="workspace">
+      <section class="scanner-card" aria-labelledby="scannerHeading">
+        <div class="card-header">
+          <div>
+            <p class="card-kicker">01 / THE LENS</p>
+            <h2 id="scannerHeading">Live plate scanner</h2>
+          </div>
+          <span class="live-badge" id="liveBadge"><span></span> STANDBY</span>
+        </div>
+
+        <div class="scan-stage" id="scanStage">
+          <video id="cameraVideo" autoplay muted playsinline aria-label="Live camera view"></video>
+          <div class="stage-grain" aria-hidden="true"></div>
+          <div class="scan-guide" aria-hidden="true"><span class="guide-corner tl"></span><span class="guide-corner tr"></span><span class="guide-corner bl"></span><span class="guide-corner br"></span></div>
+          <div class="scan-crosshair" aria-hidden="true">+</div>
+          <div id="plateOverlay" class="plate-overlay" aria-live="off"></div>
+          <div class="stage-intro" id="stageIntro">
+            <div class="stage-icon" aria-hidden="true">◉</div>
+            <strong>Ready when you are.</strong>
+            <span>No photo to take. Just point and tap.</span>
+            <button id="startButton" class="primary-button" type="button">Open live scanner <span aria-hidden="true">↗</span></button>
+          </div>
+          <div class="stage-bottom"><span id="cameraStatus" role="status">Camera off</span><span class="stage-coordinates">40°43′ N / NYC</span></div>
+        </div>
+
+        <div class="scanner-options">
+          <label class="state-control" for="stateInput"><span>PLATE STATE</span><input id="stateInput" value="AUTO" maxlength="4" inputmode="text" autocomplete="off" spellcheck="false" aria-describedby="stateHint"></label>
+          <label class="prefetch-control" for="prefetchToggle"><input id="prefetchToggle" type="checkbox" checked><span class="switch" aria-hidden="true"></span><span><strong>Fast prefetch</strong><small>Check one steady plate before you tap</small></span></label>
+          <button id="stopButton" class="text-button" type="button" hidden>Stop camera</button>
+        </div>
+        <p class="under-camera" id="stateHint">AUTO checks every state in NYC’s records, including NJ. Enter two letters to narrow it. Camera frames stay on your device. With Fast prefetch on, a stable plate may be sent to NYC Open Data before you tap. Nothing is saved here.</p>
+      </section>
+
+      <aside class="side-panel">
+        <section class="manual-card" aria-labelledby="manualHeading">
+          <p class="card-kicker">02 / THE BACKUP PLAN</p>
+          <h2 id="manualHeading">Already know the plate?</h2>
+          <p>Type it in. Same public records, same verdict.</p>
+          <form id="manualForm" class="manual-form">
+            <label for="manualPlate">LICENSE PLATE</label>
+            <div class="manual-row"><input id="manualPlate" name="plate" placeholder="ABC1234" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" required><button type="submit" aria-label="Look up typed plate">GO <span aria-hidden="true">↗</span></button></div>
+          </form>
+        </section>
+        <section class="method-card">
+          <p class="card-kicker">THE FINE PRINT</p>
+          <h2>What’s in the mix?</h2>
+          <ul class="source-list">
+            <li><span class="source-icon">P</span><span>NYC parking &amp; camera violations</span><span class="source-arrow">↗</span></li>
+            <li><span class="source-icon">M</span><span>NYPD moving summonses</span><span class="source-arrow">↗</span></li>
+            <li><span class="source-icon muted">×</span><span>Crashes <small>— no public plate field</small></span></li>
+          </ul>
+          <p class="method-note">The “asshole energy” score is editorial math on a plate’s recent NYC records. It does not identify the driver, prove fault, or tell you whether a ticket was paid.</p>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <div id="sheetBackdrop" class="sheet-backdrop" hidden>
+    <section id="resultSheet" class="result-sheet" role="dialog" aria-modal="true" aria-labelledby="sheetHeading">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header"><p class="card-kicker" id="sheetHeading">THE RECEIPTS / NYC OPEN DATA</p><button id="closeSheet" class="close-button" type="button" aria-label="Close results">×</button></div>
+      <form id="resultForm" class="result-plate-form">
+        <div class="plate-art"><span class="plate-state">STATE <input id="resultState" maxlength="4" aria-label="Correct plate state or AUTO" autocomplete="off" spellcheck="false"></span><input id="resultPlate" maxlength="10" aria-label="Correct license plate" autocomplete="off" spellcheck="false"><span class="plate-art-bottom">NYC OPEN DATA</span></div>
+        <button type="submit" class="correct-button">Update lookup ↗</button>
+      </form>
+      <p class="provisional-note" id="provisionalNote">Read by camera · check the plate and state above</p>
+      <div id="stateChoices" class="state-choices" hidden></div>
+      <div id="verdictPanel" class="verdict-panel" aria-live="polite"></div>
+      <div class="results-divider"><h3>Under the hood</h3><span>LAST 24 MONTHS</span></div>
+      <div id="sourceResults" class="source-results"></div>
+      <div id="recordResults" class="record-results"></div>
+      <details class="score-details"><summary>How the score works</summary><p>Recent school-zone speed or red-light records: 10 points each. Bike lane, bus lane, hydrant, or double parking: 6. Other parking: 2. Meters, street cleaning, or stickers: 1. Moving summonses: 5. Known dismissed or not-guilty parking rows do not score. Points become a 0–100 scale using <code>100 × (1 − e^(−points/35))</code>. No records means “no signal,” not a clean driving record.</p></details>
+      <p class="sheet-footer">Public data can be incomplete or corrected, and plates can move between vehicles. This is commentary on a plate’s records, not a claim about its current driver. <a href="https://data.cityofnewyork.us/stories/s/Terms-of-Use/k9k7-3cje" target="_blank" rel="noopener">NYC data terms ↗</a></p>
+    </section>
+  </div>
+
+  <script type="module" src="./app.mjs"></script>
+</body>
+</html>

@@ -361,6 +361,10 @@ html, body {
 
 /* responsive */
 @media (max-width: 720px) {
+  .masthead { flex-wrap: wrap; gap: 12px; padding: 17px 20px; }
+  .wordmark { flex-wrap: wrap; gap: 5px; }
+  .wordmark .sub { flex-basis: 100%; font-size: 11px; }
+  .nav { gap: 18px; font-size: 12px; }
   .list-pane { left: 12px; right: 12px; top: auto; bottom: 12px; width: auto; max-height: 60vh; }
   .map-caption { max-width: calc(100% - 72px); }
 }

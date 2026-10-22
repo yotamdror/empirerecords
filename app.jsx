@@ -63,6 +63,7 @@ function App() {
         </div>
         <nav className="nav">
           <a href="/baconeggcheese/">BEC App</a>
+          <a href="/plate-check/">Plate Check <small>beta</small></a>
         </nav>
       </header>
 
