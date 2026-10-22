@@ -1,4 +1,4 @@
-const CACHE_NAME = 'plate-check-shell-v1';
+const CACHE_NAME = 'plate-check-shell-v2';
 const SHELL = ['./', './index.html', './styles.css', './app.mjs', './scanner.mjs', './data.mjs', './icon.svg', './manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {

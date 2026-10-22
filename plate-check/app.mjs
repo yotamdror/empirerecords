@@ -234,7 +234,7 @@ const scanner = new LivePlateScanner({
     stageIntro.hidden = false;
     stageIntro.querySelector('strong').textContent = 'Camera unavailable';
     stageIntro.querySelector('span').textContent = message;
-    byId('startButton').firstChild.textContent = 'Try again ';
+    byId('startButton').firstChild.textContent = 'TRY AGAIN ';
   },
 });
 
@@ -250,7 +250,7 @@ stopButton.addEventListener('click', async () => {
   await scanner.stop();
   stage.classList.remove('is-live');
   stageIntro.hidden = false;
-  stageIntro.querySelector('strong').textContent = 'Ready when you are.';
+  stageIntro.querySelector('strong').textContent = 'See a plate?';
   stageIntro.querySelector('span').textContent = 'No photo to take. Just point and tap.';
   liveBadge.classList.remove('active');
   liveBadge.lastChild.textContent = ' STANDBY';
