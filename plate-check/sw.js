@@ -1,5 +1,5 @@
-const CACHE_NAME = 'plate-check-shell-v2';
-const SHELL = ['./', './index.html', './styles.css', './app.mjs', './scanner.mjs', './data.mjs', './icon.svg', './manifest.webmanifest'];
+const CACHE_NAME = 'plate-check-shell-v3';
+const SHELL = ['./', './index.html', './styles.css?v=2', './app.mjs?v=2', './scanner.mjs', './data.mjs', './icon.svg?v=2', './manifest.webmanifest?v=2'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
