@@ -20,7 +20,6 @@ const jobs = new Map();
 const CACHE_MS = 60_000;
 let activeJob = null;
 let activeState = 'AUTO';
-let lastPrefetchAt = 0;
 let lastFocus = null;
 
 function element(tag, className, text) {
@@ -62,13 +61,6 @@ function getJob(plate, state) {
   });
   if (jobs.size > 6) jobs.delete(jobs.keys().next().value);
   return job;
-}
-
-function prefetch(plate) {
-  const cached = jobs.get(lookupKey(plate, 'AUTO'));
-  if ((cached && reusable(cached)) || Date.now() - lastPrefetchAt < 1800) return;
-  lastPrefetchAt = Date.now();
-  getJob(plate, 'AUTO');
 }
 
 function renderVerdict(result) {
@@ -180,9 +172,8 @@ function showIdle() {
 const scanner = new LivePlateScanner({
   video: byId('cameraVideo'),
   stage,
-  overlay: byId('plateOverlay'),
-  onSelect: (plate) => openResult(plate, 'AUTO', true),
-  onStable: prefetch,
+  guide: byId('scanGuide'),
+  onRead: (plate) => openResult(plate, 'AUTO', true),
   onLive: () => {
     stage.classList.add('is-live');
     stageIntro.hidden = true;
@@ -196,8 +187,8 @@ const scanner = new LivePlateScanner({
   },
 });
 
-async function stopCamera() {
-  await scanner.stop();
+function stopCamera() {
+  scanner.stop();
   showIdle();
   cameraStatus.textContent = '';
   startButton.textContent = 'Start camera';
@@ -212,6 +203,8 @@ stopButton.addEventListener('click', stopCamera);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden' && scanner.running) stopCamera();
 });
+// Start loading the OCR model right away so the camera is ready sooner.
+scanner.warmUp().catch(() => {});
 
 manualPlate.addEventListener('input', () => manualPlate.setCustomValidity(''));
 byId('manualForm').addEventListener('submit', (event) => {

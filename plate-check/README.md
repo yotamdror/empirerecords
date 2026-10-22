@@ -8,7 +8,7 @@ Mobile web page at `/plate-check/`. Point the camera at a plate or type one, and
 python3 -m http.server 8000
 ```
 
-Open `http://localhost:8000/plate-check/`. The camera needs localhost or HTTPS. Tesseract.js and its model download from jsDelivr when the camera first starts, and recognition runs on the device. No video frames are uploaded. Plate text, and a state if one is chosen, goes straight to NYC Open Data. A plate read steadily by the camera is looked up before it is tapped.
+Open `http://localhost:8000/plate-check/`. The camera needs localhost or HTTPS. Tesseract.js and its model start downloading from jsDelivr as soon as the page loads, and stay loaded. The scanner reads only the plate-shaped box on screen and boosts contrast for night shots. When two reads in a row agree, the result opens. Recognition runs on the device and no video frames are uploaded. Plate text, and a state if one is chosen, goes straight to NYC Open Data.
 
 ## Data and score
 
@@ -25,6 +25,12 @@ node --test plate-check/data.test.mjs
 git diff --check
 ```
 
-## Open issue: scanner accuracy
+## Scanner accuracy
 
-On 2026-10-22, Tesseract 7 was tested on synthetic NY-style plates with the scanner's settings (whole 90%×48% frame, `SPARSE_TEXT`, A–Z/0–9 whitelist). It read 0 of 5 plates correctly. The same plates cropped to a box the user lines up, read with `SINGLE_BLOCK`, gave 4 of 5 correct. The one miss was a confident wrong read (`JNES520` for `JNE5520`). Tap-to-select on the whole frame shouldn't ship as-is. Move to a framed-box read, and test it on real phones (iOS Safari and Android Chrome).
+Tested 2026-10-22 in headless Chromium, using a fake camera playing synthetic NY-style plates (5 plates, day and night versions with dim light, noise and glare):
+
+- Old whole-frame `SPARSE_TEXT` scanner: 1 of 10 found.
+- Box crop + contrast boost + `SINGLE_BLOCK`: 8 of 10 correct, about 1 s from Start to result on a desktop CPU.
+- Misses were one-letter confusions (`JNES520`, `INE5520` for `JNE5520`), so the result sheet keeps the plate editable.
+
+Plates without a digit must be typed. Not yet measured on real phones or real plates.
