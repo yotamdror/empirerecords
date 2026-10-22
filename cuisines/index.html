@@ -27,9 +27,10 @@
   <p>Most of New York's restaurants serve something you can find in any neighborhood: American, pizza,
   coffee, Chinese takeout. Those tell you little about a place, so this map sets them aside and asks a
   different question: <em>which cuisine is far more common here than in the city as a whole?</em></p>
-  <p>Each hexagon below covers about a quarter mile. Its color is the family of the cuisine that is most
-  over-represented in it, and darker means a stronger standout. A block where 1 in 3 restaurants is Filipino,
-  when citywide it is 1 in 700, is very dark.</p>
+  <p>Each dot below is one restaurant, all <span data-stat="n">…</span> of them, so the map is also a map of
+  where New York eats out at all. Color is the cuisine's region. A dot is bright when its cuisine is far more
+  common within about a block than in the city as a whole: on a block where 1 in 3 restaurants is Filipino,
+  when citywide it is 1 in 700, the Filipino dots light up. Gray dots are the everyday places we set aside.</p>
 </article>
 
 <section class="scrolly" id="scrolly">
@@ -43,7 +44,7 @@
       <p>Before zooming in, the pattern is already visible: orange South Asian in central Queens,
       purple Eastern European and kosher in south Brooklyn, pink Caribbean across central Brooklyn and
       southeast Queens, yellow Latin American along the 7 train and in upper Manhattan.</p>
-      <p class="note">Gray hexagons have restaurants, but none of them stand out.</p>
+      <p class="note">Gray dots are American, pizza, coffee and other everyday places, plus Chinese until the end.</p>
     </div>
     <div class="step" data-step="manila">
       <h3>Little Manila, Woodside</h3>
@@ -116,16 +117,24 @@
 <section class="explore" id="explore">
   <div class="prose">
     <h2>Explore it yourself</h2>
-    <p>Choose how fine the map is, which cuisines to leave out, or pick one cuisine to see where it
-    clusters. Hover over or tap a hexagon to see what is in it. Scroll or pinch to zoom.</p>
+    <p>Pick one cuisine to see where it clusters, or choose which cuisines to leave out. Hover over or tap
+    a dot to see the restaurant and what stands out around it. Scroll or pinch to zoom all the way in to
+    single blocks. Switch to hexagons to compare neighborhoods.</p>
   </div>
   <div class="controls" id="controls">
     <div class="ctl">
-      <span class="ctl-label">Grain</span>
+      <span class="ctl-label">Show</span>
+      <div class="seg" id="view">
+        <button data-view="dots" aria-pressed="true">Every restaurant</button>
+        <button data-view="hex">Hexagons</button>
+      </div>
+    </div>
+    <div class="ctl" id="grain-ctl" hidden>
+      <span class="ctl-label">Hexagon size</span>
       <div class="seg" id="grain">
-        <button data-grain="block">Block</button>
-        <button data-grain="quarter" aria-pressed="true">¼ mile</button>
-        <button data-grain="half">½ mile</button>
+        <button data-grain="block" aria-pressed="true">1 block</button>
+        <button data-grain="small">2–3 blocks</button>
+        <button data-grain="quarter">¼ mile</button>
       </div>
     </div>
     <div class="ctl">
@@ -183,9 +192,11 @@
   state inspects, are not in this dataset. Each restaurant picks one cuisine from a fixed list of about 90 labels,
   so “African” covers Senegalese and Nigerian alike, and there is no Uzbek, Tibetan or Dominican label.
   “Spanish” is how many Dominican and Puerto Rican restaurants describe themselves.</p>
-  <p><strong>The math.</strong> For each hexagon and cuisine, <em>expected</em> is the number of restaurants
-  in the hexagon times the cuisine's citywide share. A cuisine stands out when it has at least two restaurants
-  there and at least 1.5 times the expected number. Among those, the hexagon shows the one that is furthest
+  <p><strong>The math.</strong> The city is divided into hexagons about 200 meters across (roughly two
+  avenue blocks). For each hexagon and cuisine, <em>expected</em> is the number of restaurants
+  in the hexagon times the cuisine's citywide share. A restaurant's dot is bright when its own cuisine
+  stands out in its hexagon. Labels apply the same test to quarter-mile hexagons. A cuisine stands out when it has at least two restaurants
+  there and at least 1.5 times the expected number. The hexagon view and the labels show the one furthest
   above expected, scored by Poisson deviance (<i>k</i>·ln(<i>k</i>/<i>e</i>) − (<i>k</i> − <i>e</i>)).
   That score weighs a big excess over a small one, so three Ethiopian restaurants don't beat twenty
   kosher ones just because Ethiopian is rarer.</p>

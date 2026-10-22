@@ -29,12 +29,14 @@
   ];
   const DEFAULT_OUT = [0, 1];
 
-  const GRAINS = { block: 80, quarter: 200, half: 400 }; // hex radius, meters
+  const GRAINS = { block: 60, small: 120, quarter: 200 }; // hex radius, meters
+  const EMPHASIS_GRAIN = "small"; // a dot is bright when its cuisine stands out within ~1 block
+  const LABEL_GRAIN = "quarter";
   const MIN_K = 2, MIN_LQ = 1.5, MIN_G = 3;
 
   // Scrollytelling steps: bounds are [[west, south], [east, north]].
   const STEPS = {
-    city: { bounds: [[-74.26, 40.49], [-73.70, 40.92]], grain: "half" },
+    city: { bounds: [[-74.26, 40.49], [-73.70, 40.92]] },
     manila: { bounds: [[-73.95, 40.725], [-73.85, 40.765]], focus: ["Filipino"] },
     bangla: { bounds: [[-74.0, 40.62], [-73.76, 40.85]], focus: ["Bangladeshi"] },
     indian: { bounds: [[-73.88, 40.67], [-73.70, 40.77]], focus: ["Indian"] },
@@ -183,65 +185,151 @@
     const hideTip = () => { tooltip.hidden = true; };
 
     // ---------------------------------------------------------------- map
+    // A canvas draws land, restaurants (or hexagons) and coastline; an SVG on
+    // top carries labels and the hover outline and takes pointer and zoom input.
+    const quadtree = d3.quadtree(d3.range(N), i => px[i], i => py[i]);
+    const HEX_CORNERS = d3.range(6).map(i => [Math.sin(i * Math.PI / 3), -Math.cos(i * Math.PI / 3)]);
+
+    // Which restaurants' cuisines stand out within their small hexagon.
+    function standoutPoints(st) {
+      const flags = new Uint8Array(N);
+      for (const bin of binsFor(EMPHASIS_GRAIN).bins) {
+        const hits = new Set();
+        for (const [c, kk] of bin.counts) if (score(kk, bin.n, c, false) > 0) hits.add(c);
+        if (hits.size) for (const i of bin) if (hits.has(data.c[i])) flags[i] = 1;
+      }
+      return flags;
+    }
+
     function makeMap(el, { interactive, inset = () => 0 }) {
+      const canvas = d3.select(el).append("canvas").node();
+      const ctx = canvas.getContext("2d");
       const svg = d3.select(el).append("svg").attr("preserveAspectRatio", "xMidYMid meet");
       const root = svg.append("g");
-      root.append("path").attr("class", "land").attr("d", borosPath);
-      const hexG = root.append("g");
-      root.append("path").attr("class", "coast").attr("d", borosPath);
       const hover = root.append("path").attr("class", "hover");
       const labelG = root.append("g").attr("class", "labels");
+      const land = new Path2D(borosPath);
 
-      let state = null, grain = null, k = 1, pxPerUnit = 1, labels = [], res = [];
-      let vb = [0, 0, 1000, 1000];
+      let state = null, t = d3.zoomIdentity, k = 1, pxPerUnit = 1, labels = [], res = [], layers = null;
+      let vb = [0, 0, 1000, 1000], dpr = 1, frame = 0;
 
-      const zoom = d3.zoom().scaleExtent([1, 24])
+      const zoom = d3.zoom().scaleExtent([1, 40])
         .on("zoom", ev => {
-          root.attr("transform", ev.transform);
-          k = ev.transform.k;
+          t = ev.transform; k = t.k;
+          root.attr("transform", t);
+          if (ev.sourceEvent) { hover.attr("d", null); hideTip(); }
           sizeLabels();
+          requestDraw();
         })
         .on("end", placeLabels);
       if (interactive) svg.call(zoom).on("dblclick.zoom", null);
 
       function resize() {
         const w = el.clientWidth, h = el.clientHeight || w;
+        if (!w || !h) return;
         const aspect = w / h;
         vb = aspect >= 1 ? [-(1000 * aspect - 1000) / 2, 0, 1000 * aspect, 1000]
                          : [0, -(1000 / aspect - 1000) / 2, 1000, 1000 / aspect];
         svg.attr("viewBox", vb.join(" "));
         pxPerUnit = w / vb[2];
+        dpr = Math.min(2, window.devicePixelRatio || 1);
+        canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
         zoom.extent([[vb[0], vb[1]], [vb[0] + vb[2], vb[1] + vb[3]]])
           .translateExtent([[vb[0] - 200, vb[1] - 200], [vb[0] + vb[2] + 200, vb[1] + vb[3] + 200]]);
         sizeLabels();
         placeLabels();
+        draw();
       }
 
       function update(next) {
-        const grainChanged = grain !== next.grain;
-        state = next;
-        grain = next.grain;
-        const { bins, hexagon } = binsFor(state.grain);
+        state = Object.assign({}, next);
+        const { bins } = binsFor(state.view === "hex" ? state.grain : LABEL_GRAIN);
         const results = bins.map(bin => standout(bin, state));
-        const gs = results.filter(Boolean).map(d => d.g).sort(d3.ascending);
-        const gMax = Math.max(MIN_G * 4, d3.quantileSorted(gs, 0.9) || 0);
-        const op = d3.scaleSqrt().domain([state.focus ? 0 : MIN_G, gMax]).range(state.focus ? [0.2, 1] : [0.45, 1]).clamp(true);
         const minG = state.focus ? 0 : MIN_G;
-
-        if (grainChanged) {
-          hexG.selectAll("path").data(bins).join("path").attr("class", "hex")
-            .attr("d", d => `M${d.x},${d.y}${hexagon}`);
-        }
         res = results.map(r => (r && r.g > minG ? r : null));
-        hexG.selectAll("path").each(function (d) {
-          const r = res[d.id];
-          this.style.fill = r ? famVar(r.c) : "var(--hex-none)";
-          this.style.opacity = r ? op(r.g) : (state.focus ? 0.35 : 0.55);
-        });
 
+        if (state.view === "hex") {
+          const gs = res.filter(Boolean).map(d => d.g).sort(d3.ascending);
+          const gMax = Math.max(MIN_G * 4, d3.quantileSorted(gs, 0.9) || 0);
+          const op = d3.scaleSqrt().domain([minG, gMax]).range(state.focus ? [0.2, 1] : [0.45, 1]).clamp(true);
+          layers = { hex: bins.map(bin => {
+            const r = res[bin.id];
+            return { x: bin.x, y: bin.y, f: r ? family[r.c] : -1, a: r ? op(r.g) : (state.focus ? 0.35 : 0.55) };
+          }), r: binsFor(state.grain).r * 0.9 };
+        } else {
+          // Draw order: background dots first, standouts last so they sit on top.
+          const groups = new Map();
+          const add = (key, i) => { (groups.get(key) || groups.set(key, []).get(key)).push(i); };
+          const flags = state.focus ? null : standoutPoints(state);
+          for (let i = 0; i < N; i++) {
+            const c = data.c[i];
+            if (state.focus) add(state.focus.includes(c) ? "on:" + family[c] : "bg", i);
+            else if (isOut(c, state.out)) add("bg", i);
+            else add((flags[i] ? "on:" : "mid:") + family[c], i);
+          }
+          const order = ["bg", ...d3.range(9).map(f => "mid:" + f), ...d3.range(9).map(f => "on:" + f)];
+          layers = { dots: order.filter(key => groups.has(key)).map(key => {
+            const [kind, f] = key.split(":");
+            return {
+              idx: groups.get(key), f: kind === "bg" ? -1 : +f,
+              a: kind === "bg" ? (state.focus ? 0.35 : 0.5) : kind === "mid" ? 0.55 : 1,
+              size: kind === "on" ? (state.focus ? 1.6 : 1.25) : 1,
+            };
+          }) };
+        }
+
+        // Labels always come from quarter-mile clusters, which read better than tiny ones.
+        if (state.view === "hex" && state.grain !== LABEL_GRAIN) {
+          const lb = binsFor(LABEL_GRAIN).bins;
+          labels = buildLabels(lb, lb.map(bin => { const r = standout(bin, state); return r && r.g > minG ? r : null; }), state);
+        } else {
+          labels = buildLabels(bins, res, state);
+        }
         hover.attr("d", null);
-        labels = buildLabels(bins, res, state);
         placeLabels();
+        draw();
+      }
+
+      function requestDraw() { if (!frame) frame = requestAnimationFrame(draw); }
+
+      function draw() {
+        if (frame) { cancelAnimationFrame(frame); frame = 0; }
+        const col = palette();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const s = dpr * pxPerUnit;
+        ctx.setTransform(s * k, 0, 0, s * k, s * (t.x - vb[0]), s * (t.y - vb[1]));
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = col.land; ctx.fill(land);
+        const unit = 1 / (pxPerUnit * k); // reference units per CSS pixel
+        if (layers && layers.hex) {
+          const r = layers.r;
+          for (const hx of layers.hex) {
+            ctx.globalAlpha = hx.a;
+            ctx.fillStyle = hx.f < 0 ? col.none : col.f[hx.f];
+            ctx.beginPath();
+            HEX_CORNERS.forEach(([cx, cy], j) => (j ? ctx.lineTo : ctx.moveTo).call(ctx, hx.x + cx * r, hx.y + cy * r));
+            ctx.fill();
+          }
+        } else if (layers) {
+          const base = Math.min(8, 1.7 * Math.sqrt(k)); // dot diameter in CSS pixels
+          for (const layer of layers.dots) {
+            const rr = base * layer.size * unit * 0.5;
+            ctx.globalAlpha = layer.a;
+            ctx.fillStyle = layer.f < 0 ? col.dot : col.f[layer.f];
+            ctx.beginPath();
+            if (base * layer.size < 2.5) {
+              for (const i of layer.idx) ctx.rect(px[i] - rr, py[i] - rr, 2 * rr, 2 * rr);
+            } else {
+              for (const i of layer.idx) { ctx.moveTo(px[i] + rr, py[i]); ctx.arc(px[i], py[i], rr, 0, 2 * Math.PI); }
+            }
+            ctx.fill();
+          }
+        }
+        ctx.globalAlpha = 0.6;
+        ctx.lineWidth = unit;
+        ctx.strokeStyle = col.coast; ctx.stroke(land);
+        ctx.globalAlpha = 1;
       }
 
       // Connected runs of hexagons sharing a standout cuisine get one label.
@@ -279,7 +367,6 @@
       function placeLabels() {
         const fs = 12 / (pxPerUnit * k), placed = [], byText = new Map();
         const apart = 150 / (pxPerUnit * k);
-        const t = d3.zoomTransform(svg.node());
         const [x0, y0] = t.invert([vb[0], vb[1]]), [x1, y1] = t.invert([vb[0] + vb[2], vb[1] + vb[3]]);
         const shown = labels.filter(l => {
           if (l.x < x0 || l.x > x1 || l.y < y0 || l.y > y1) return false;
@@ -296,10 +383,9 @@
           .attr("x", d => d.x).attr("y", d => d.y).text(d => d.text);
       }
 
-      // Hover and tap: find the hexagon under the pointer.
-      function binAt(ev) {
-        const [mx, my] = d3.zoomTransform(svg.node()).invert(d3.pointer(ev, svg.node()));
-        const { bins, r } = binsFor(state.grain);
+      // Hover and tap: the restaurant (or hexagon) under the pointer.
+      function binAt(mx, my, grain) {
+        const { bins, r } = binsFor(grain);
         let best = null, bd = r * r;
         for (const bin of bins) {
           const d = (bin.x - mx) ** 2 + (bin.y - my) ** 2;
@@ -307,48 +393,81 @@
         }
         return best;
       }
-      svg.on("pointermove", ev => {
-        if (!state || ev.pointerType === "touch") return;
-        const bin = binAt(ev);
-        if (!bin) { hover.attr("d", null); hideTip(); return; }
-        hover.attr("d", `M${bin.x},${bin.y}${binsFor(state.grain).hexagon}`).attr("stroke-width", 1.5 / (pxPerUnit * k));
-        showTip(tooltipHTML(bin, state), ev);
-      }).on("pointerleave", () => { hover.attr("d", null); hideTip(); })
-        .on("click", ev => {
-          if (!state) return;
-          const bin = binAt(ev);
-          if (!bin) { hideTip(); return; }
-          hover.attr("d", `M${bin.x},${bin.y}${binsFor(state.grain).hexagon}`).attr("stroke-width", 1.5 / (pxPerUnit * k));
+      function inspect(ev) {
+        if (!state) return;
+        const [mx, my] = t.invert(d3.pointer(ev, svg.node()));
+        const sw = 1.5 / (pxPerUnit * k);
+        if (state.view === "hex") {
+          const bin = binAt(mx, my, state.grain);
+          if (!bin) { hover.attr("d", null); hideTip(); return; }
+          hover.attr("d", `M${bin.x},${bin.y}${binsFor(state.grain).hexagon}`).attr("stroke-width", sw);
           showTip(tooltipHTML(bin, state), ev);
-        });
+          return;
+        }
+        const i = quadtree.find(mx, my, (ev.pointerType === "touch" ? 16 : 8) / (pxPerUnit * k));
+        if (i === undefined) { hover.attr("d", null); hideTip(); return; }
+        const rr = 5 / (pxPerUnit * k);
+        hover.attr("d", `M${px[i] + rr},${py[i]}A${rr},${rr} 0 1 1 ${px[i] - rr},${py[i]}A${rr},${rr} 0 1 1 ${px[i] + rr},${py[i]}`).attr("stroke-width", sw);
+        showTip(restaurantHTML(i, binAt(px[i], py[i], EMPHASIS_GRAIN), state), ev);
+      }
+      svg.on("pointermove", ev => { if (ev.pointerType !== "touch") inspect(ev); })
+        .on("pointerleave", () => { hover.attr("d", null); hideTip(); })
+        .on("click", inspect);
 
       function zoomTo(bounds, duration) {
         const [[x0, y1], [x1, y0]] = bounds.map(p => proj(p));
         const h = vb[3] * (1 - inset());
-        const scale = Math.min(24, 0.9 * Math.min(vb[2] / (x1 - x0), h / (y1 - y0)));
+        const scale = Math.min(40, 0.9 * Math.min(vb[2] / (x1 - x0), h / (y1 - y0)));
         const cx = vb[0] + vb[2] / 2, cy = vb[1] + h / 2;
-        const t = d3.zoomIdentity.translate(cx, cy).scale(Math.max(1, scale)).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
+        const tt = d3.zoomIdentity.translate(cx, cy).scale(Math.max(1, scale)).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
         const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         svg.interrupt();
-        if (duration && !reduce) svg.transition().duration(duration).ease(d3.easeCubicInOut).call(zoom.transform, t);
-        else svg.call(zoom.transform, t);
+        if (duration && !reduce) svg.transition().duration(duration).ease(d3.easeCubicInOut).call(zoom.transform, tt);
+        else svg.call(zoom.transform, tt);
       }
       function reset() { zoomTo(STEPS.city.bounds, 600); }
 
       new ResizeObserver(resize).observe(el);
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+      new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
       resize();
       return { update, zoomTo, reset, get state() { return state; } };
     }
 
+    function palette() {
+      const s = getComputedStyle(document.documentElement);
+      const v = name => s.getPropertyValue(name).trim();
+      return { land: v("--land"), none: v("--hex-none"), dot: v("--dot"), coast: v("--muted"), f: d3.range(9).map(f => v(`--f${f}`)) };
+    }
+
+    function restaurantHTML(i, bin, st) {
+      const c = data.c[i], g = data.grades[data.g[i]];
+      let h = `<h4>${esc(data.name[i])}</h4><div class="meta"><span class="sw" style="background:${famVar(c)}"></span>${esc(C[c])}` +
+        `${g ? " · grade " + g : ""}<br>${esc(data.ntas[data.n[i]].replace(/^park-cemetery-etc-(.*)/, "Parkland, $1"))}</div>`;
+      if (bin) {
+        const near = [...bin.counts].map(([cc, kk]) => ({ c: cc, k: kk, g: score(kk, bin.n, cc, false), lq: (kk / bin.n) / share[cc] }))
+          .filter(d => d.g > 0).sort((x, y) => y.g - x.g).slice(0, 3);
+        h += `<div class="meta">${fmt(bin.n)} restaurant${bin.n === 1 ? "" : "s"} within a couple of blocks` +
+          (near.length ? ". Stands out here:" : ". Nothing stands out.") + "</div>";
+        if (near.length) h += "<table>" + near.map(d =>
+          `<tr><td><span class="sw" style="background:${famVar(d.c)}"></span>${esc(C[d.c])}</td>` +
+          `<td class="num">${d.k}</td><td class="num">${d.lq >= 10 ? Math.round(d.lq) : d.lq.toFixed(1)}× city</td></tr>`).join("") + "</table>";
+      }
+      return h;
+    }
+
     function drawLegend(el, st) {
-      const used = st && st.focus
-        ? [...new Set(st.focus.map(c => family[cIndex.get(c)]))]
-        : d3.range(8);
+      const focus = st.focus && st.focus.map(c => C[c]);
+      const hex = st.view === "hex";
+      const used = focus ? [...new Set(st.focus.map(c => family[c]))] : d3.range(8);
+      const sub = hex
+        ? (focus ? `Showing: ${focus.join(", ")}. Darker = further above the city rate.`
+                 : "Color = the most over-represented cuisine. Darker = a stronger standout.")
+        : (focus ? `Each dot is a restaurant. Colored: ${focus.join(", ")}.`
+                 : "Each dot is a restaurant. Bright dots: that cuisine stands out within a couple of blocks.");
       el.innerHTML = used.map(f => `<span><i class="sw" style="background:var(--f${f})"></i>${f === EVERYDAY ? "American & everyday" : FAMILIES[f][0]}</span>`).join("") +
-        `<span><i class="sw" style="background:var(--hex-none)"></i>${st && st.focus ? "None here" : "Nothing stands out"}</span>` +
-        `<span class="sub">${st && st.focus
-          ? "Showing: " + st.focus.join(", ") + ". Darker = further above the city rate."
-          : "Color = the most over-represented cuisine. Darker = a stronger standout."}</span>`;
+        `<span><i class="sw" style="background:var(${hex ? "--hex-none" : "--dot"})"></i>${hex ? (focus ? "None here" : "Nothing stands out") : (focus ? "Everything else" : "Left out")}</span>` +
+        `<span class="sub">${sub}</span>`;
     }
 
     // ------------------------------------------------------------ scrolly
@@ -358,9 +477,9 @@
     function setStep(key) {
       const s = STEPS[key];
       const focus = s.focus ? s.focus.filter(c => cIndex.has(c)).map(c => cIndex.get(c)) : null;
-      const st = { grain: s.grain || "quarter", out: DEFAULT_OUT, focus };
+      const st = { view: "dots", grain: "block", out: DEFAULT_OUT, focus };
       scrollyMap.update(st);
-      drawLegend(scrollyLegend, { focus: s.focus });
+      drawLegend(scrollyLegend, st);
       scrollyMap.zoomTo(s.bounds, 900);
       document.querySelectorAll(".step").forEach(el => el.classList.toggle("is-active", el.dataset.step === key));
     }
@@ -373,10 +492,12 @@
     // ------------------------------------------------------------ explore
     const exploreMap = makeMap(document.getElementById("map-explore"), { interactive: true });
     const exploreLegend = document.getElementById("legend-explore");
-    const ex = { grain: "quarter", out: DEFAULT_OUT.slice(), focus: null };
+    const ex = { view: "dots", grain: "block", out: DEFAULT_OUT.slice(), focus: null };
     function renderExplore() {
       exploreMap.update(ex);
-      drawLegend(exploreLegend, ex.focus ? { focus: ex.focus.map(c => C[c]) } : null);
+      drawLegend(exploreLegend, ex);
+      d3.selectAll("#view button").attr("aria-pressed", function () { return this.dataset.view === ex.view; });
+      d3.select("#grain-ctl").property("hidden", ex.view !== "hex");
       d3.selectAll("#chips button").attr("aria-pressed", (d, i) => ex.out.includes(i))
         .property("disabled", !!ex.focus);
       d3.selectAll("#grain button").attr("aria-pressed", function () { return this.dataset.grain === ex.grain; });
@@ -389,6 +510,7 @@
         renderExplore();
       });
     d3.selectAll("#grain button").on("click", function () { ex.grain = this.dataset.grain; renderExplore(); });
+    d3.selectAll("#view button").on("click", function () { ex.view = this.dataset.view; renderExplore(); });
     const focusSel = document.getElementById("focus");
     C.map((c, i) => [c, i]).filter(([, i]) => cityCount[i] >= 3)
       .sort((x, y) => d3.ascending(x[0], y[0]))
@@ -398,7 +520,7 @@
       renderExplore();
     });
     document.getElementById("reset").addEventListener("click", () => {
-      ex.grain = "quarter"; ex.out = DEFAULT_OUT.slice(); ex.focus = null; focusSel.value = "";
+      ex.view = "dots"; ex.grain = "block"; ex.out = DEFAULT_OUT.slice(); ex.focus = null; focusSel.value = "";
       renderExplore(); exploreMap.reset();
     });
     renderExplore();
