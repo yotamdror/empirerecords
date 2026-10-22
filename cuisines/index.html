@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Where New York Eats — Empire Records</title>
+<meta name="description" content="Every restaurant in New York City, mapped by the cuisine that stands out most on each block. Little Manila, Bangladeshi Queens, Brighton Beach, Borough Park, the three Chinatowns."/>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="cuisines.css"/>
+</head>
+<body>
+
+<nav class="topnav"><a href="/">Empire Records</a></nav>
+
+<header class="hed">
+  <p class="kicker">NYC Open Data · Restaurant inspections</p>
+  <h1>Where New York Eats</h1>
+  <p class="dek">Every restaurant in the city has to tell the Health Department what it serves.
+  Map those answers and the city's immigrant neighborhoods appear, block by block.</p>
+  <p class="byline">Data as of <span data-stat="asof">…</span> · <span data-stat="n">…</span> restaurants · <span data-stat="cuisines">…</span> cuisines</p>
+</header>
+
+<article class="prose">
+  <p>Most of New York's restaurants serve something you can find in any neighborhood: American, pizza,
+  coffee, Chinese takeout. Those tell you little about a place, so this map sets them aside and asks a
+  different question: <em>which cuisine is far more common here than in the city as a whole?</em></p>
+  <p>Each hexagon below covers about a quarter mile. Its color is the family of the cuisine that is most
+  over-represented in it, and darker means a stronger standout. A block where 1 in 3 restaurants is Filipino,
+  when citywide it is 1 in 700, is very dark.</p>
+</article>
+
+<section class="scrolly" id="scrolly">
+  <div class="scrolly-fig">
+    <div class="legend" id="legend-scrolly"></div>
+    <div class="map" id="map-scrolly" role="img" aria-label="Map of New York City colored by the most over-represented cuisine in each area"></div>
+  </div>
+  <div class="steps">
+    <div class="step" data-step="city">
+      <h3>The whole city</h3>
+      <p>Before zooming in, the pattern is already visible: orange South Asian in central Queens,
+      purple Eastern European and kosher in south Brooklyn, pink Caribbean across central Brooklyn and
+      southeast Queens, yellow Latin American along the 7 train and in upper Manhattan.</p>
+      <p class="note">Gray hexagons have restaurants, but none of them stand out.</p>
+    </div>
+    <div class="step" data-step="manila">
+      <h3>Little Manila, Woodside</h3>
+      <p>Twelve of the city's 37 Filipino restaurants are in Woodside, most of them along Roosevelt Avenue
+      under the 7 train. That is about 60 times the citywide rate, the most concentrated enclave in the data.</p>
+    </div>
+    <div class="step" data-step="bangla">
+      <h3>Bangladeshi Queens, and beyond</h3>
+      <p>Jackson Heights has 15 Bangladeshi restaurants, Briarwood–Jamaica Hills 14, Jamaica 8.
+      The community has spread too: smaller clusters show up in Kensington, Brooklyn, in Cypress Hills,
+      and in Parkchester in the Bronx.</p>
+    </div>
+    <div class="step" data-step="indian">
+      <h3>Richmond Hill and the eastern edge</h3>
+      <p>Richmond Hill has more Indian restaurants than any other neighborhood (21), many of them
+      Indo-Caribbean, sitting next to Guyanese and Trinidadian spots that the city files as Caribbean. Further east,
+      Glen Oaks and Bellerose at the Nassau line have a second Indian cluster.</p>
+    </div>
+    <div class="step" data-step="korea">
+      <h3>Two Koreatowns</h3>
+      <p>Midtown's Koreatown, around 32nd Street, has 97 Korean restaurants. Flushing's Murray Hill,
+      around the Long Island Rail Road station, has 88. Together they hold almost half of the city's Korean
+      restaurants. A third, smaller cluster sits in Bayside.</p>
+    </div>
+    <div class="step" data-step="thai">
+      <h3>Hell's Kitchen is Thai</h3>
+      <p>No neighborhood has more Thai restaurants than Hell's Kitchen: 15 of them, with Chelsea and Midtown
+      close behind. That is Manhattan's restaurant-dense version of Elmhurst, Queens, where 12 Thai
+      restaurants anchor the city's Thai community.</p>
+      <p class="note">Little Brazil on West 46th Street has mostly faded: Midtown has 3 Brazilian
+      restaurants, and Astoria now has the most, with 6.</p>
+    </div>
+    <div class="step" data-step="astoria">
+      <h3>Astoria: Greek, Egyptian, Brazilian</h3>
+      <p>Steinway, north Astoria, has 17 Greek restaurants. Along Steinway Street,
+      “Little Egypt” helps give Astoria 4 of the city's 12 Egyptian restaurants, among Moroccan and Middle Eastern
+      places.</p>
+    </div>
+    <div class="step" data-step="greenpoint">
+      <h3>Greenpoint, still Polish</h3>
+      <p>Gentrification has changed Greenpoint, but 8 of the city's 18 Polish restaurants remain there.
+      That is 45 times what you would expect.</p>
+    </div>
+    <div class="step" data-step="brighton">
+      <h3>Brighton Beach</h3>
+      <p>Brighton Beach, Sheepshead Bay and Homecrest together have 41 of the city's 127 Eastern European
+      restaurants and 23 of its 42 Russian ones.</p>
+    </div>
+    <div class="step" data-step="kosher">
+      <h3>Kosher Brooklyn and Queens</h3>
+      <p>Borough Park (41), Midwood (39) and Homecrest (33) hold a third of the city's kosher restaurants.
+      Smaller clusters mark the Orthodox communities of Williamsburg, Forest Hills, and Kew Gardens Hills.</p>
+    </div>
+    <div class="step" data-step="caribbean">
+      <h3>The Caribbean belt</h3>
+      <p>The city's biggest enclave by area is Caribbean: from Crown Heights through East Flatbush in
+      Brooklyn, then in southeast Queens from South Ozone Park, which has the most Caribbean restaurants
+      (56), out to Laurelton. In the north Bronx, Wakefield has Caribbean spots alongside the area's Irish
+      pubs.</p>
+    </div>
+    <div class="step" data-step="chinatowns">
+      <h3>Adding Chinese back in: three Chinatowns</h3>
+      <p>We left Chinese out of the map because there is a Chinese restaurant in almost every neighborhood.
+      Add it back and three Chinatowns appear. Flushing (272) and Sunset Park (150) now each have more
+      Chinese restaurants than Manhattan's Chinatown (122), and Bensonhurst (68) is a fourth.</p>
+    </div>
+  </div>
+</section>
+
+<section class="explore" id="explore">
+  <div class="prose">
+    <h2>Explore it yourself</h2>
+    <p>Choose how fine the map is, which cuisines to leave out, or pick one cuisine to see where it
+    clusters. Hover over or tap a hexagon to see what is in it. Scroll or pinch to zoom.</p>
+  </div>
+  <div class="controls" id="controls">
+    <div class="ctl">
+      <span class="ctl-label">Grain</span>
+      <div class="seg" id="grain">
+        <button data-grain="block">Block</button>
+        <button data-grain="quarter" aria-pressed="true">¼ mile</button>
+        <button data-grain="half">½ mile</button>
+      </div>
+    </div>
+    <div class="ctl">
+      <label class="ctl-label" for="focus">Cuisine</label>
+      <select id="focus"><option value="">Biggest standout (all)</option></select>
+    </div>
+    <div class="ctl ctl-wide">
+      <span class="ctl-label">Left out</span>
+      <div class="chips" id="chips"></div>
+    </div>
+    <button class="reset" id="reset">Reset view</button>
+  </div>
+  <div class="legend" id="legend-explore"></div>
+  <div class="map map-explore" id="map-explore" role="img" aria-label="Interactive map of New York City cuisine clusters"></div>
+</section>
+
+<section class="multiples-sec" id="multiples">
+  <div class="prose">
+    <h2>Every cuisine, mapped</h2>
+    <p>One small map per cuisine, each dot a restaurant. Sorted by how clustered the cuisine is: the share
+    of its restaurants in its three biggest neighborhoods. American and pizza look like the whole city.
+    Filipino and Polish are a few dots in one place. Click a map to open it in the explorer above.</p>
+  </div>
+  <div class="controls">
+    <div class="ctl">
+      <span class="ctl-label">Sort</span>
+      <div class="seg" id="sort">
+        <button data-sort="clustered" aria-pressed="true">Most clustered</button>
+        <button data-sort="count">Most common</button>
+        <button data-sort="alpha">A–Z</button>
+      </div>
+    </div>
+  </div>
+  <div class="multiples" id="multiples-grid"></div>
+</section>
+
+<section class="grades-sec">
+  <div class="prose">
+    <h2>And, since we have it: the letter grades</h2>
+    <p>The same dataset is where the Health Department's letter grades come from. Overall,
+    <span data-stat="pctA">…</span> of graded restaurants have an A. By cuisine, each line runs from the
+    citywide rate to that cuisine's share of A's. The gaps are real but small, and may reflect where and
+    how restaurants are inspected as much as how clean the kitchens are.</p>
+  </div>
+  <div class="grades" id="grades"></div>
+</section>
+
+<footer class="prose notes">
+  <h2>About the data</h2>
+  <p><strong>Source.</strong> <a href="https://data.cityofnewyork.us/Health/DOHMH-New-York-City-Restaurant-Inspection-Results/43nn-pn8j">DOHMH New York City Restaurant Inspection Results</a>,
+  one row per restaurant, limited to the <span data-stat="n">…</span> that are open, have been
+  inspected, have a cuisine on file, and have a map location. Neighborhoods are the city's 2010
+  Neighborhood Tabulation Areas.</p>
+  <p><strong>What's missing.</strong> Food carts and trucks, and most bodegas and groceries, which the
+  state inspects, are not in this dataset. Each restaurant picks one cuisine from a fixed list of about 90 labels,
+  so “African” covers Senegalese and Nigerian alike, and there is no Uzbek, Tibetan or Dominican label.
+  “Spanish” is how many Dominican and Puerto Rican restaurants describe themselves.</p>
+  <p><strong>The math.</strong> For each hexagon and cuisine, <em>expected</em> is the number of restaurants
+  in the hexagon times the cuisine's citywide share. A cuisine stands out when it has at least two restaurants
+  there and at least 1.5 times the expected number. Among those, the hexagon shows the one that is furthest
+  above expected, scored by Poisson deviance (<i>k</i>·ln(<i>k</i>/<i>e</i>) − (<i>k</i> − <i>e</i>)).
+  That score weighs a big excess over a small one, so three Ethiopian restaurants don't beat twenty
+  kosher ones just because Ethiopian is rarer.</p>
+  <p><strong>Colors</strong> group cuisines into eight regional families. The map labels each cluster with its
+  cuisine name, so you don't have to tell colors apart.</p>
+  <p class="credit"><a href="/">Empire Records</a> · Code and data build script in this site's repository.</p>
+</footer>
+
+<div class="tooltip" id="tooltip" role="status" aria-live="polite" hidden></div>
+<noscript><p class="prose">This page needs JavaScript to draw its maps.</p></noscript>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" integrity="sha384-CjloA8y00+1SDAUkjs099PVfnY2KmDC2BZnws9kh8D/lX1s46w6EPhpXdqMfjK6i" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-hexbin@0.2.2/build/d3-hexbin.min.js" integrity="sha384-f75A4YfSo2UGygtmfFTbftknO5Qris3Lbqix2CUpAxh62N0JX78gvP/art2zpEKm" crossorigin="anonymous"></script>
+<script src="cuisines.js"></script>
+</body>
+</html>

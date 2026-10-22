@@ -8,7 +8,8 @@ Sources:
   swpk-hqdp  NTA (2010) code -> name, matching the inspection data's `nta` codes
 
 boroughs.json is a static asset: borough boundaries (gthc-hcne) simplified
-to 5% with mapshaper. It does not need rebuilding.
+with `mapshaper -simplify 5% keep-shapes -o format=geojson gj2008` (gj2008
+keeps the clockwise rings d3 expects). It does not need rebuilding.
 """
 import collections
 import json
