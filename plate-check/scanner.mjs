@@ -11,7 +11,7 @@ function loadTesseract() {
     script.src = TESSERACT_URL;
     script.async = true;
     script.onload = () => globalThis.Tesseract ? resolve(globalThis.Tesseract) : reject(new Error('OCR library did not initialize.'));
-    script.onerror = () => reject(new Error('Could not load the local scanner. Check your connection.'));
+    script.onerror = () => reject(new Error('Could not load the scanner. Check your connection.'));
     document.head.append(script);
   }).catch((error) => {
     tesseractLoad = null;
@@ -52,28 +52,31 @@ function extractCandidates(data) {
 }
 
 function cameraError(error) {
-  if (error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError') return 'Camera permission was denied. You can type a plate below.';
-  if (error?.name === 'NotFoundError') return 'No camera was found. You can type a plate below.';
-  return error?.message || 'The camera could not start. You can type a plate below.';
+  if (error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError') return 'Camera blocked. Type a plate below.';
+  if (error?.name === 'NotFoundError') return 'No camera found. Type a plate below.';
+  return error?.message || 'Camera didn’t start. Type a plate below.';
 }
 
 export class LivePlateScanner {
-  constructor({ video, stage, overlay, onSelect, onStable, onStatus, onError }) {
+  constructor({ video, stage, overlay, onSelect, onStable, onLive, onStatus, onError }) {
     this.video = video;
     this.stage = stage;
     this.overlay = overlay;
     this.onSelect = onSelect;
     this.onStable = onStable;
+    this.onLive = onLive;
     this.onStatus = onStatus;
     this.onError = onError;
     this.running = false;
     this.starting = false;
     this.paused = false;
+    this.busy = false;
     this.timer = null;
     this.worker = null;
     this.stream = null;
     this.canvas = document.createElement('canvas');
     this.observations = new Map();
+    this.targets = new Map();
     this.stablePlate = null;
   }
 
@@ -84,19 +87,15 @@ export class LivePlateScanner {
       return;
     }
     if (!navigator.mediaDevices?.getUserMedia) {
-      this.onError('Live camera requires HTTPS or localhost and a supported browser.');
+      this.onError('Camera needs HTTPS and a supported browser.');
       return;
     }
 
-    this.onStatus('Opening camera and warming up local recognition…');
+    this.onStatus('Loading scanner…');
     this.starting = true;
     try {
       const workerPromise = loadTesseract().then(async (Tesseract) => {
-        const worker = await Tesseract.createWorker('eng', 1, {
-          logger: (event) => {
-            if (!this.running && event.status) this.onStatus(`Preparing scanner · ${event.status}`);
-          },
-        });
+        const worker = await Tesseract.createWorker('eng', 1);
         await worker.setParameters({
           tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
           tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT,
@@ -121,7 +120,8 @@ export class LivePlateScanner {
       await this.video.play();
       this.running = true;
       this.paused = false;
-      this.onStatus('Live · point at a plate, then tap its highlight');
+      this.onLive();
+      this.onStatus('Tap a highlighted plate');
       this.scan();
     } catch (error) {
       this.onError(cameraError(error));
@@ -131,17 +131,21 @@ export class LivePlateScanner {
     }
   }
 
+  clearTargets() {
+    this.targets.clear();
+    this.overlay.replaceChildren();
+  }
+
   pause() {
     this.paused = true;
     clearTimeout(this.timer);
-    this.overlay.replaceChildren();
+    this.clearTargets();
   }
 
   resume() {
     if (!this.running) return;
     if (!this.paused) return;
     this.paused = false;
-    this.onStatus('Live · point at a plate, then tap its highlight');
     this.scan();
   }
 
@@ -149,7 +153,7 @@ export class LivePlateScanner {
     this.running = false;
     this.paused = false;
     clearTimeout(this.timer);
-    this.overlay.replaceChildren();
+    this.clearTargets();
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = null;
     this.video.srcObject = null;
@@ -218,20 +222,30 @@ export class LivePlateScanner {
       if (!current.has(plate) && now - observation.lastSeen > 3500) this.observations.delete(plate);
     }
 
-    const buttons = shown.map((candidate) => {
-      const button = document.createElement('button');
-      button.type = 'button';
+    // Reuse each plate's button so a tap in progress survives the next frame.
+    for (const [plate, button] of this.targets) {
+      if (!current.has(plate)) {
+        button.remove();
+        this.targets.delete(plate);
+      }
+    }
+    for (const candidate of shown) {
+      let button = this.targets.get(candidate.plate);
+      if (!button) {
+        button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = candidate.plate;
+        button.setAttribute('aria-label', `Look up plate ${candidate.plate}`);
+        button.addEventListener('click', () => this.onSelect(candidate.plate));
+        this.targets.set(candidate.plate, button);
+        this.overlay.append(button);
+      }
       button.className = `plate-target${candidate.hits >= 2 ? ' stable' : ''}`;
       button.style.left = `${candidate.box.left}px`;
       button.style.top = `${candidate.box.top}px`;
       button.style.width = `${Math.min(stageWidth - candidate.box.left, candidate.box.width)}px`;
       button.style.height = `${Math.min(stageHeight - candidate.box.top, candidate.box.height)}px`;
-      button.textContent = candidate.plate;
-      button.setAttribute('aria-label', `Look up plate ${candidate.plate}`);
-      button.addEventListener('click', () => this.onSelect(candidate.plate, candidate.hits >= 2));
-      return button;
-    });
-    this.overlay.replaceChildren(...buttons);
+    }
 
     const stable = shown.filter((candidate) => candidate.hits >= 2)
       .sort((a, b) => {
@@ -249,17 +263,21 @@ export class LivePlateScanner {
   }
 
   async scan() {
-    if (!this.running || this.paused || !this.worker) return;
+    // busy keeps a pause/resume during recognition from starting a second loop.
+    if (!this.running || this.paused || !this.worker || this.busy) return;
     const frame = this.capture();
     if (!frame) {
       this.timer = setTimeout(() => this.scan(), 250);
       return;
     }
+    this.busy = true;
     try {
-      const result = await this.worker.recognize(this.canvas, {}, { blocks: true, text: true });
+      const result = await this.worker.recognize(this.canvas, {}, { blocks: true, text: false });
       if (this.running && !this.paused) this.showCandidates(extractCandidates(result.data), frame);
-    } catch (error) {
-      this.onStatus(`Scanner retrying · ${error?.message || 'recognition error'}`);
+    } catch {
+      // Skip a bad frame; the next one retries.
+    } finally {
+      this.busy = false;
     }
     if (this.running && !this.paused) this.timer = setTimeout(() => this.scan(), 160);
   }

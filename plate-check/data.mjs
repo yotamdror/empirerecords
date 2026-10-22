@@ -77,7 +77,7 @@ export function sourceUrl(sourceId, plate, state, now = new Date()) {
     const yearFilter = years.map((year) => `issue_date like '%/${year}'`).join(' OR ');
     return apiUrl(
       'nc67-uf89',
-      'plate,state,license_type,summons_number,issue_date,violation,violation_status,amount_due',
+      'state,summons_number,issue_date,violation,violation_status',
       `plate='${p}'${s === 'AUTO' ? '' : ` AND state='${s}'`} AND (${yearFilter})`,
       PARKING_LIMIT,
     );
@@ -87,7 +87,7 @@ export function sourceUrl(sourceId, plate, state, now = new Date()) {
     const dataset = sourceId === 'movingYtd' ? '57p3-pdcj' : 'bme5-7ty4';
     return apiUrl(
       dataset,
-      'evnt_key,violation_date,chg_law_cd,violation_code,reg_plate_num,reg_state_cd',
+      'evnt_key,violation_date,chg_law_cd,violation_code,reg_state_cd',
       `reg_plate_num='${p}'${s === 'AUTO' ? '' : ` AND reg_state_cd='${s}'`} AND violation_date >= '${yyyyMmDd(start)}T00:00:00'`,
       MOVING_LIMIT,
       'violation_date DESC',
@@ -130,8 +130,6 @@ export function normalizeSourceRows(sourceId, rawRows, now = new Date()) {
         date: yyyyMmDd(date),
         label: String(raw.violation || 'Unspecified parking or camera violation'),
         status: String(raw.violation_status || ''),
-        amountDue: raw.amount_due == null ? null : Number(raw.amount_due),
-        plateType: String(raw.license_type || ''),
       });
     } else {
       const date = movingDate(raw.violation_date);
@@ -144,8 +142,6 @@ export function normalizeSourceRows(sourceId, rawRows, now = new Date()) {
         date: yyyyMmDd(date),
         label: code ? `Moving summons · ${code}` : 'Moving summons',
         status: 'Issued',
-        amountDue: null,
-        plateType: '',
       });
     }
   }
@@ -153,46 +149,22 @@ export function normalizeSourceRows(sourceId, rawRows, now = new Date()) {
   return rows.sort((a, b) => b.date.localeCompare(a.date));
 }
 
-function linkedAbortSignal(parentSignal, timeoutMs) {
-  const controller = new AbortController();
-  const onParentAbort = () => controller.abort(parentSignal.reason);
-  if (parentSignal?.aborted) onParentAbort();
-  else parentSignal?.addEventListener('abort', onParentAbort, { once: true });
-  const timer = setTimeout(() => controller.abort(new Error('NYC Open Data timed out.')), timeoutMs);
-  return {
-    signal: controller.signal,
-    cleanup() {
-      clearTimeout(timer);
-      parentSignal?.removeEventListener('abort', onParentAbort);
-    },
-  };
-}
-
 export async function fetchSource(sourceId, plate, state, options = {}) {
-  const { fetchImpl = fetch, now = new Date(), signal, timeoutMs = 9000 } = options;
-  const linked = linkedAbortSignal(signal, timeoutMs);
-  const startedAt = globalThis.performance?.now?.() ?? Date.now();
-
-  try {
-    const response = await fetchImpl(sourceUrl(sourceId, plate, state, now), {
-      signal: linked.signal,
-      cache: 'no-store',
-      headers: { Accept: 'application/json' },
-    });
-    if (!response.ok) throw new Error(response.status === 429 ? 'NYC Open Data is rate limiting requests.' : `NYC Open Data returned ${response.status}.`);
-    const rawRows = await response.json();
-    if (!Array.isArray(rawRows)) throw new Error('NYC Open Data returned an unexpected response.');
-    const limit = sourceId === 'parking' ? PARKING_LIMIT : MOVING_LIMIT;
-    return {
-      status: 'ready',
-      rows: normalizeSourceRows(sourceId, rawRows.slice(0, limit - 1), now),
-      truncated: rawRows.length >= limit,
-      updatedAt: response.headers?.get?.('last-modified') || null,
-      elapsedMs: Math.round((globalThis.performance?.now?.() ?? Date.now()) - startedAt),
-    };
-  } finally {
-    linked.cleanup();
-  }
+  const { fetchImpl = fetch, now = new Date(), timeoutMs = 9000 } = options;
+  const response = await fetchImpl(sourceUrl(sourceId, plate, state, now), {
+    signal: AbortSignal.timeout(timeoutMs),
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  });
+  if (!response.ok) throw new Error(response.status === 429 ? 'NYC Open Data is rate limiting requests.' : `NYC Open Data returned ${response.status}.`);
+  const rawRows = await response.json();
+  if (!Array.isArray(rawRows)) throw new Error('NYC Open Data returned an unexpected response.');
+  const limit = sourceId === 'parking' ? PARKING_LIMIT : MOVING_LIMIT;
+  return {
+    status: 'ready',
+    rows: normalizeSourceRows(sourceId, rawRows.slice(0, limit - 1), now),
+    truncated: rawRows.length >= limit,
+  };
 }
 
 export async function lookupPlate(plate, state, options = {}) {
@@ -206,8 +178,7 @@ export async function lookupPlate(plate, state, options = {}) {
         status: 'error',
         rows: [],
         truncated: false,
-        updatedAt: null,
-        message: error?.name === 'AbortError' ? 'Lookup stopped.' : String(error?.message || error),
+        message: error?.name === 'TimeoutError' ? 'NYC Open Data timed out.' : String(error?.message || error),
       };
     }
     onSource(source.id, result[source.id]);
@@ -251,7 +222,7 @@ export function severityPoints(row) {
 export function verdict(sourceResults, state = 'AUTO') {
   const states = SOURCES.map((source) => sourceResults[source.id]?.status || 'pending');
   const complete = states.every((status) => status === 'ready');
-  const failed = states.some((status) => status === 'error');
+  const failed = SOURCES.map((source) => sourceResults[source.id]).find((result) => result?.status === 'error');
   const truncated = SOURCES.some((source) => sourceResults[source.id]?.truncated);
   const matches = availableStates(sourceResults);
   const unknownStateRows = deduplicatedRows(sourceResults).filter((row) => !/^[A-Z]{2}$/.test(row.state)).length;
@@ -264,10 +235,8 @@ export function verdict(sourceResults, state = 'AUTO') {
       status: matches.length ? 'ambiguous' : 'state-unknown', score: null, records, countedRecords: 0,
       matches,
       matchedState: null,
-      title: matches.length ? 'Which state is on the plate?' : 'Plate state needed',
-      detail: unknownStateRows
-        ? 'Some NYC rows lack a usable state. Enter or select the state on the plate to avoid mixing vehicles.'
-        : 'NYC has recent records for this plate text in multiple states. Pick the state you saw to avoid mixing vehicles.',
+      title: 'Which state?',
+      detail: unknownStateRows ? 'Some records have no state. Enter the state on the plate.' : 'This plate has records in more than one state.',
     };
   }
 
@@ -279,8 +248,8 @@ export function verdict(sourceResults, state = 'AUTO') {
       countedRecords: scored.length,
       matches,
       matchedState: chosenState === 'AUTO' ? null : chosenState,
-      title: truncated ? 'Too many rows for a fair score' : failed ? 'Partial record check' : 'Still checking the records',
-      detail: truncated ? 'Open the NYC datasets for the complete record.' : failed ? 'One source could not be reached, so no score is shown.' : 'A verdict waits for every selected source.',
+      title: truncated ? 'Too many records to score' : failed ? 'Couldn’t reach NYC' : 'Checking…',
+      detail: truncated ? 'See the NYC datasets for the full record.' : failed ? `${failed.message} Tap Update to retry.` : '',
     };
   }
 
@@ -292,8 +261,8 @@ export function verdict(sourceResults, state = 'AUTO') {
       countedRecords: 0,
       matches,
       matchedState: chosenState === 'AUTO' ? null : chosenState,
-      title: 'No asshole signal found',
-      detail: 'No scored NYC records in the last 24 months. That says nothing certain about the current driver.',
+      title: 'No asshole signal',
+      detail: 'No scored NYC records in 24 months.',
     };
   }
 
@@ -315,6 +284,6 @@ export function verdict(sourceResults, state = 'AUTO') {
     matches,
     matchedState: chosenState,
     title,
-    detail: 'An editorial score for this plate’s NYC records, not the current driver.',
+    detail: `${scored.length} scored ${scored.length === 1 ? 'record' : 'records'} in 24 months.`,
   };
 }
