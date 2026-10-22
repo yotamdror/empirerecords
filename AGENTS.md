@@ -2,6 +2,14 @@
 
 These rules extend `~/Projects/AGENTS.md` and apply to this static site.
 
+## North star
+
+The owner's dream: Empire Records as an NYC version of
+[neal.fun](https://neal.fun/), a collection of small, playful, single-idea web
+toys, each one a delight in its own right, built on New York City and its open
+data. Weigh new features and pages against that: one clear idea per toy, instant
+to grasp, fun to poke at, and shareable.
+
 ## Thread naming
 
 Title every thread so it reads on a phone: the slug, a one-word stage, and
