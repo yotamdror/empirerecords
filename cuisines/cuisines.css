@@ -146,7 +146,7 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--f0); outli
 .grades .row:hover .row-label { fill: var(--ink); font-weight: 600; }
 
 .notes { margin-top: 5rem; padding-top: 2rem; padding-bottom: 4rem; border-top: 1px solid var(--rule); font-size: 16px; }
-.notes h2 { font-size: 1.2rem; }
+.notes summary { font-size: 1.2rem; cursor: pointer; margin-bottom: .75em; }
 .credit { font-size: 13px; color: var(--muted); }
 
 .tooltip {
@@ -169,8 +169,9 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--f0); outli
   .scrolly-fig { height: 100vh; height: 100svh; padding: 8px 16px 0; z-index: 0; }
   .scrolly-fig .legend { font-size: 11px; gap: 2px 10px; padding-bottom: 4px; }
   .steps { position: relative; z-index: 1; padding: 0 16px 30vh; margin-top: -40vh; pointer-events: none; }
-  .step { margin-bottom: 75vh; opacity: 1; box-shadow: 0 2px 12px rgba(0,0,0,.12); pointer-events: auto; }
-  .step p { font-size: 16px; }
+  .step { margin-bottom: 100vh; padding: 12px 14px; opacity: 1; box-shadow: 0 2px 12px rgba(0,0,0,.12); pointer-events: auto; }
+  .step h3 { font-size: 1rem; margin-bottom: .25em; }
+  .step p { font-size: 15px; line-height: 1.45; }
   .step:not(.is-active) { opacity: .9; }
   .map-explore { height: 70vh; height: 70svh; }
 }

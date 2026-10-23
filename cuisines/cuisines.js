@@ -35,19 +35,14 @@
   const MIN_K = 2, MIN_LQ = 1.5, MIN_G = 3;
 
   // Scrollytelling steps: bounds are [[west, south], [east, north]].
+  const CITY = [[-74.26, 40.49], [-73.70, 40.92]];
   const STEPS = {
-    city: { bounds: [[-74.26, 40.49], [-73.70, 40.92]] },
-    manila: { bounds: [[-73.95, 40.725], [-73.85, 40.765]], focus: ["Filipino"] },
-    bangla: { bounds: [[-74.0, 40.62], [-73.76, 40.85]], focus: ["Bangladeshi"] },
-    indian: { bounds: [[-73.88, 40.67], [-73.70, 40.77]], focus: ["Indian"] },
-    korea: { bounds: [[-74.0, 40.72], [-73.75, 40.79]], focus: ["Korean"] },
-    thai: { bounds: [[-74.02, 40.725], [-73.86, 40.78]], focus: ["Thai"] },
-    astoria: { bounds: [[-73.945, 40.75], [-73.885, 40.79]], focus: ["Greek", "Egyptian", "Brazilian", "Moroccan", "Middle Eastern"] },
-    greenpoint: { bounds: [[-73.975, 40.715], [-73.925, 40.742]], focus: ["Polish"] },
-    brighton: { bounds: [[-74.0, 40.57], [-73.92, 40.615]], focus: ["Russian", "Eastern European"] },
-    kosher: { bounds: [[-74.03, 40.59], [-73.80, 40.74]], focus: ["Kosher"] },
-    caribbean: { bounds: [[-74.0, 40.60], [-73.72, 40.72]], focus: ["Caribbean"] },
-    chinatowns: { bounds: [[-74.04, 40.59], [-73.79, 40.78]], focus: ["Chinese"] },
+    city: { bounds: CITY },
+    southasia: { bounds: CITY, focus: ["Bangladeshi", "Indian", "Pakistani"] },
+    manila: { bounds: [[-73.97, 40.715], [-73.84, 40.775]], focus: ["Filipino"] },
+    brooklyn: { bounds: CITY, focus: ["Kosher", "Russian", "Eastern European"] },
+    caribbean: { bounds: CITY, focus: ["Caribbean"] },
+    chinatowns: { bounds: CITY, focus: ["Chinese"] },
   };
 
   const tooltip = document.getElementById("tooltip");
@@ -235,7 +230,7 @@
         dpr = Math.min(2, window.devicePixelRatio || 1);
         canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
         zoom.extent([[vb[0], vb[1]], [vb[0] + vb[2], vb[1] + vb[3]]])
-          .translateExtent([[vb[0] - 200, vb[1] - 200], [vb[0] + vb[2] + 200, vb[1] + vb[3] + 200]]);
+          .translateExtent([[vb[0] - vb[2] / 2, vb[1] - vb[3] / 2], [vb[0] + vb[2] * 1.5, vb[1] + vb[3] * 1.5]]);
         sizeLabels();
         placeLabels();
         draw();
