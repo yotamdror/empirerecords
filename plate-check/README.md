@@ -8,7 +8,7 @@ Mobile web page at `/plate-check/`. Point the camera at a plate or type one, and
 python3 -m http.server 8000
 ```
 
-Open `http://localhost:8000/plate-check/`. The camera needs localhost or HTTPS. Tesseract.js and its model start downloading from jsDelivr as soon as the page loads, and stay loaded. The scanner reads only the plate-shaped box on screen and boosts contrast for night shots. When two reads in a row agree, the result opens. Recognition runs on the device and no video frames are uploaded. Plate text, and a state if one is chosen, goes straight to NYC Open Data.
+Open `http://localhost:8000/plate-check/`. The camera needs localhost or HTTPS. The scanner runs a small plate-reading model (`models/cct_xs_v2_global.onnx`, 3.3 MB, from [fast-plate-ocr](https://github.com/ankandrew/fast-plate-ocr), MIT) in ONNX Runtime Web, which loads from jsDelivr. It starts loading as soon as the page opens and stays loaded. The scanner reads the plate-shaped box on screen and averages the model's output over the last 4 frames. The result opens when every character is at least 70% likely on two frames in a row. Recognition runs on the device and no video frames are uploaded. Plate text, and a state if one is chosen, goes straight to NYC Open Data.
 
 ## Data and score
 
@@ -21,16 +21,23 @@ The formula is in `data.mjs` (`severityPoints`, `verdict`). It skips parking row
 ## Verify
 
 ```sh
-node --test plate-check/data.test.mjs
+node --test plate-check/*.test.mjs
 git diff --check
 ```
 
 ## Scanner accuracy
 
-Tested 2026-10-22 in headless Chromium, using a fake camera playing synthetic NY-style plates (5 plates, day and night versions with dim light, noise and glare):
+Tested 2026-10-23 in headless Chromium with the app's own model, crop and decoding code, on the 222 real US photos in [OpenALPR's benchmark](https://github.com/openalpr/benchmarks/tree/master/endtoend/us) (median plate 87 px wide). Each plate got 4 simulated video frames.
 
-- Old whole-frame `SPARSE_TEXT` scanner: 1 of 10 found.
-- Box crop + contrast boost + `SINGLE_BLOCK`: 8 of 10 correct, about 1 s from Start to result on a desktop CPU.
-- Misses were one-letter confusions (`JNES520`, `INE5520` for `JNE5520`), so the result sheet keeps the plate editable.
+| Condition | Correct | Opens a result | Opens a wrong plate |
+| --- | --- | --- | --- |
+| Framed in the box | 91% | 90% | 5% |
+| Loosely framed, off-centre | 88% | 86% | 4% |
+| Far (60% resolution) | 88% | 86% | 5% |
+| Tilted ±9° | 91% | 88% | 4% |
+| Dusk (45% light, light noise) | 89% | 86% | 5% |
+| Dark night (25% light, heavy noise) | 47% | 59% | 31% |
 
-Plates without a digit must be typed. Not yet measured on real phones or real plates.
+The model takes about 19 ms per frame on a desktop CPU, single-threaded. On synthetic NY plates, which the model has never seen, it got 9 of 10 right in day and night video, with no wrong opens. The model's training data may include the OpenALPR photos, so real-world accuracy may be lower. Tesseract, the previous scanner, scored about 5% on the same photos.
+
+Dark scenes are the weak spot, and the result sheet keeps the plate editable for that reason. Not yet measured on real phones.

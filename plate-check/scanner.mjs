@@ -1,67 +1,67 @@
-import { normalizePlate } from './data.mjs';
+const ORT_BASE = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/';
+// fast-plate-ocr cct-xs-v2-global (MIT, see models/LICENSE): 128×64 RGB in,
+// 10 character slots × 37 classes out.
+const MODEL_URL = new URL('./models/cct_xs_v2_global.onnx', import.meta.url).href;
+const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_';
+const INPUT_WIDTH = 128;
+const INPUT_HEIGHT = 64;
+// Averaging a few frames cancels sensor noise; the gate waits for a sure read.
+// Tuned on 222 real US plates: ~88% of daytime plates open, ~5% of those wrong.
+const FUSED_FRAMES = 4;
+const MIN_CHAR_CONFIDENCE = 0.7;
+const IGNORE_MS = 1500;
+let ortLoad;
 
-const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js';
-const CROP_WIDTH = 640;
-let tesseractLoad;
-
-function loadTesseract() {
-  if (globalThis.Tesseract) return Promise.resolve(globalThis.Tesseract);
-  if (tesseractLoad) return tesseractLoad;
-  tesseractLoad = new Promise((resolve, reject) => {
+function loadOrt() {
+  if (globalThis.ort) return Promise.resolve(globalThis.ort);
+  ortLoad ??= new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = TESSERACT_URL;
+    script.src = `${ORT_BASE}ort.wasm.min.js`;
     script.async = true;
-    script.onload = () => globalThis.Tesseract ? resolve(globalThis.Tesseract) : reject(new Error('OCR library did not initialize.'));
+    script.onload = () => globalThis.ort ? resolve(globalThis.ort) : reject(new Error('Scanner did not initialize.'));
     script.onerror = () => reject(new Error('Could not load the scanner. Check your connection.'));
     document.head.append(script);
   }).catch((error) => {
-    tesseractLoad = null;
+    ortLoad = null;
     throw error;
   });
-  return tesseractLoad;
+  return ortLoad;
 }
 
-// Plates have 4–8 characters and at least one digit; the digit rule drops
-// state names and slogans like NEWYORK or EMPIRE. Tesseract's confidence is
-// unreliable here (correct reads can score 0), so two agreeing reads filter instead.
-function bestPlate(data) {
-  let best = null;
-  for (const block of data.blocks || []) {
-    for (const paragraph of block.paragraphs || []) {
-      for (const line of paragraph.lines || []) {
-        for (const part of [line, ...(line.words || [])]) {
-          const plate = normalizePlate(part.text);
-          const confidence = Number(part.confidence || 0);
-          if (!/^[A-Z0-9]{4,8}$/.test(plate) || !/\d/.test(plate)) continue;
-          if (!best || confidence > best.confidence) best = { plate, confidence };
-        }
+export async function createPlateModel() {
+  const ort = await loadOrt();
+  ort.env.wasm.wasmPaths = ORT_BASE;
+  ort.env.wasm.numThreads = 1; // GitHub Pages can't send the headers threads need.
+  const session = await ort.InferenceSession.create(MODEL_URL, { executionProviders: ['wasm'] });
+  return async (rgb) => {
+    const input = new ort.Tensor('uint8', rgb, [1, INPUT_HEIGHT, INPUT_WIDTH, 3]);
+    const output = await session.run({ input });
+    return output.plate.data;
+  };
+}
+
+// Average per-slot probabilities over frames, then read the best character per slot.
+// Returns the plate and its weakest character's probability.
+export function decodePlate(frames) {
+  const slots = frames[0].length / ALPHABET.length;
+  let plate = '';
+  let confidence = 1;
+  for (let slot = 0; slot < slots; slot += 1) {
+    let best = 0;
+    let bestProbability = -1;
+    for (let k = 0; k < ALPHABET.length; k += 1) {
+      let probability = 0;
+      for (const frame of frames) probability += frame[slot * ALPHABET.length + k];
+      probability /= frames.length;
+      if (probability > bestProbability) {
+        best = k;
+        bestProbability = probability;
       }
     }
+    confidence = Math.min(confidence, bestProbability);
+    if (ALPHABET[best] !== '_') plate += ALPHABET[best];
   }
-  return best?.plate ?? null;
-}
-
-// Stretch the crop's brightness range so dim night frames have usable contrast.
-function boostContrast(context, width, height) {
-  const image = context.getImageData(0, 0, width, height);
-  const pixels = image.data;
-  const histogram = new Uint32Array(256);
-  for (let i = 0; i < pixels.length; i += 4) {
-    const gray = (pixels[i] * 77 + pixels[i + 1] * 150 + pixels[i + 2] * 29) >> 8;
-    pixels[i] = gray;
-    histogram[gray] += 1;
-  }
-  const total = width * height;
-  let low = 0;
-  let high = 255;
-  for (let count = 0; low < 255 && (count += histogram[low]) < total * 0.02;) low += 1;
-  for (let count = 0; high > 0 && (count += histogram[high]) < total * 0.02;) high -= 1;
-  const range = Math.max(1, high - low);
-  for (let i = 0; i < pixels.length; i += 4) {
-    const value = Math.max(0, Math.min(255, ((pixels[i] - low) * 255) / range));
-    pixels[i] = pixels[i + 1] = pixels[i + 2] = value;
-  }
-  context.putImageData(image, 0, 0);
+  return { plate, confidence };
 }
 
 function cameraError(error) {
@@ -84,28 +84,25 @@ export class LivePlateScanner {
     this.paused = false;
     this.busy = false;
     this.timer = null;
-    this.workerPromise = null;
-    this.worker = null;
+    this.modelPromise = null;
+    this.model = null;
     this.stream = null;
     this.canvas = document.createElement('canvas');
+    this.canvas.width = INPUT_WIDTH;
+    this.canvas.height = INPUT_HEIGHT;
+    this.frames = [];
     this.lastRead = null;
     this.ignore = null;
+    this.ignoreSeenAt = 0;
   }
 
-  // Load the OCR worker ahead of time; it stays alive for the page's life.
+  // Load the model ahead of time; it stays loaded for the page's life.
   warmUp() {
-    if (!this.workerPromise) {
-      this.workerPromise = loadTesseract().then(async (Tesseract) => {
-        const worker = await Tesseract.createWorker('eng', 1);
-        await worker.setParameters({
-          tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-          tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
-        });
-        return worker;
-      });
-      this.workerPromise.catch(() => { this.workerPromise = null; });
+    if (!this.modelPromise) {
+      this.modelPromise = createPlateModel();
+      this.modelPromise.catch(() => { this.modelPromise = null; });
     }
-    return this.workerPromise;
+    return this.modelPromise;
   }
 
   async start() {
@@ -122,12 +119,12 @@ export class LivePlateScanner {
         audio: false,
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
       });
-      const [workerResult, streamResult] = await Promise.allSettled([this.warmUp(), streamPromise]);
-      if (streamResult.status === 'rejected' || workerResult.status === 'rejected') {
+      const [modelResult, streamResult] = await Promise.allSettled([this.warmUp(), streamPromise]);
+      if (streamResult.status === 'rejected' || modelResult.status === 'rejected') {
         if (streamResult.status === 'fulfilled') streamResult.value.getTracks().forEach((track) => track.stop());
-        throw streamResult.status === 'rejected' ? streamResult.reason : workerResult.reason;
+        throw streamResult.status === 'rejected' ? streamResult.reason : modelResult.reason;
       }
-      this.worker = workerResult.value;
+      this.model = modelResult.value;
       this.stream = streamResult.value;
       this.video.srcObject = this.stream;
       await this.video.play();
@@ -152,6 +149,7 @@ export class LivePlateScanner {
   resume() {
     if (!this.running || !this.paused) return;
     this.paused = false;
+    this.frames = [];
     this.lastRead = null;
     this.onStatus('Fit a plate in the box');
     this.scan();
@@ -164,15 +162,17 @@ export class LivePlateScanner {
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = null;
     this.video.srcObject = null;
+    this.frames = [];
     this.lastRead = null;
     this.ignore = null;
   }
 
-  // Copy the part of the video under the on-screen guide box (video uses object-fit: cover).
+  // Scale the part of the video under the on-screen guide box (video uses
+  // object-fit: cover) to the model's 128×64 RGB input.
   capture() {
     const videoWidth = this.video.videoWidth;
     const videoHeight = this.video.videoHeight;
-    if (!videoWidth || !videoHeight) return false;
+    if (!videoWidth || !videoHeight) return null;
     const stageRect = this.stage.getBoundingClientRect();
     const guideRect = this.guide.getBoundingClientRect();
     const scale = Math.max(stageRect.width / videoWidth, stageRect.height / videoHeight);
@@ -182,26 +182,36 @@ export class LivePlateScanner {
     const y = Math.max(0, (guideRect.top - stageRect.top - offsetY) / scale);
     const width = Math.min(videoWidth - x, guideRect.width / scale);
     const height = Math.min(videoHeight - y, guideRect.height / scale);
-    if (width < 1 || height < 1) return false;
-    this.canvas.width = CROP_WIDTH;
-    this.canvas.height = Math.round(CROP_WIDTH * height / width);
+    if (width < 1 || height < 1) return null;
     const context = this.canvas.getContext('2d', { willReadFrequently: true });
-    context.drawImage(this.video, x, y, width, height, 0, 0, this.canvas.width, this.canvas.height);
-    boostContrast(context, this.canvas.width, this.canvas.height);
-    return true;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(this.video, x, y, width, height, 0, 0, INPUT_WIDTH, INPUT_HEIGHT);
+    const rgba = context.getImageData(0, 0, INPUT_WIDTH, INPUT_HEIGHT).data;
+    const rgb = new Uint8Array(INPUT_WIDTH * INPUT_HEIGHT * 3);
+    for (let i = 0, j = 0; i < rgba.length; i += 4, j += 3) {
+      rgb[j] = rgba[i];
+      rgb[j + 1] = rgba[i + 1];
+      rgb[j + 2] = rgba[i + 2];
+    }
+    return rgb;
   }
 
-  handleRead(plate) {
-    // Don't reopen the plate just closed until it has left the box.
-    if (plate !== this.ignore) this.ignore = null;
-    if (!plate || plate === this.ignore) {
+  handleRead({ plate, confidence }) {
+    const sure = confidence >= MIN_CHAR_CONFIDENCE && /^[A-Z0-9]{2,8}$/.test(plate);
+    // Don't reopen the plate just closed until it has been out of the box for a moment.
+    const now = Date.now();
+    if (plate === this.ignore) this.ignoreSeenAt = now;
+    else if (now - this.ignoreSeenAt > IGNORE_MS) this.ignore = null;
+    if (!sure || plate === this.ignore) {
       if (this.lastRead) this.onStatus('Fit a plate in the box');
       this.lastRead = null;
       return;
     }
     if (plate === this.lastRead) {
       this.ignore = plate;
+      this.ignoreSeenAt = now;
       this.lastRead = null;
+      this.frames = [];
       this.onRead(plate);
       return;
     }
@@ -210,21 +220,25 @@ export class LivePlateScanner {
   }
 
   async scan() {
-    // busy keeps a pause/resume during recognition from starting a second loop.
-    if (!this.running || this.paused || !this.worker || this.busy) return;
-    if (!this.capture()) {
+    // busy keeps a pause/resume during a read from starting a second loop.
+    if (!this.running || this.paused || !this.model || this.busy) return;
+    const rgb = this.capture();
+    if (!rgb) {
       this.timer = setTimeout(() => this.scan(), 200);
       return;
     }
     this.busy = true;
     try {
-      const result = await this.worker.recognize(this.canvas, {}, { blocks: true, text: false });
-      if (this.running && !this.paused) this.handleRead(bestPlate(result.data));
+      const probabilities = await this.model(rgb);
+      if (this.running && !this.paused) {
+        this.frames = [...this.frames.slice(1 - FUSED_FRAMES), probabilities];
+        this.handleRead(decodePlate(this.frames));
+      }
     } catch {
       // Skip a bad frame; the next one retries.
     } finally {
       this.busy = false;
     }
-    if (this.running && !this.paused) this.timer = setTimeout(() => this.scan(), 60);
+    if (this.running && !this.paused) this.timer = setTimeout(() => this.scan(), 50);
   }
 }
